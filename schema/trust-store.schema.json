@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verified-container.org/schema/trust-store-v1.json",
+  "title": "Verified Container Trust Store",
+  "description": "Schema for trust store containing public keys and policies",
+  "type": "object",
+  "required": ["version", "id", "updated", "keys", "thresholds", "logs"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Trust store format version"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for this trust store"
+    },
+    "updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last update"
+    },
+    "keys": {
+      "type": "object",
+      "description": "Keys organized by role",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "$ref": "#/$defs/keyEntry" }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "description": "Threshold signature groups",
+      "additionalProperties": { "$ref": "#/$defs/thresholdGroup" }
+    },
+    "logs": {
+      "type": "object",
+      "description": "Transparency log operators",
+      "additionalProperties": { "$ref": "#/$defs/logOperator" },
+      "minProperties": 3
+    }
+  },
+  "$defs": {
+    "keyEntry": {
+      "type": "object",
+      "required": ["id", "algorithm", "publicKey", "validFrom"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$|^[a-zA-Z0-9_-]+$",
+          "description": "Unique key identifier"
+        },
+        "algorithm": {
+          "type": "string",
+          "enum": ["ed25519"],
+          "description": "Cryptographic algorithm"
+        },
+        "publicKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/=]+$",
+          "description": "Base64-encoded public key"
+        },
+        "validFrom": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When key becomes valid"
+        },
+        "validUntil": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When key expires (optional)"
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "owner": { "type": "string" },
+            "description": { "type": "string" }
+          }
+        }
+      }
+    },
+    "thresholdGroup": {
+      "type": "object",
+      "required": ["k", "n", "algorithm", "members"],
+      "properties": {
+        "k": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum signatures required"
+        },
+        "n": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total members in group"
+        },
+        "algorithm": {
+          "type": "string",
+          "enum": ["frost-ed25519"],
+          "description": "Threshold signature algorithm"
+        },
+        "members": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Key IDs of group members"
+        }
+      }
+    },
+    "logOperator": {
+      "type": "object",
+      "required": ["operator", "publicKey", "url", "algorithm"],
+      "properties": {
+        "operator": {
+          "type": "string",
+          "description": "Name of the log operator"
+        },
+        "publicKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/=]+$",
+          "description": "Base64-encoded public key"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Log API endpoint"
+        },
+        "algorithm": {
+          "type": "string",
+          "enum": ["ed25519"],
+          "description": "Signature algorithm"
+        }
+      }
+    }
+  }
+}

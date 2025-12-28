@@ -1,0 +1,255 @@
+= Attestation Bundle Format
+:spec-version: 0.1.0
+:status: draft
+:media-type: application/vnd.verified-container.bundle+json
+
+== 1. Overview
+
+An attestation bundle packages multiple in-toto attestations with transparency log inclusion proofs into a single distributable unit.
+
+== 2. Media Type
+
+```
+application/vnd.verified-container.bundle+json
+```
+
+== 3. Structure
+
+```json
+{
+  "mediaType": "application/vnd.verified-container.bundle+json",
+  "version": "0.1.0",
+  "attestations": [ /* in-toto statements */ ],
+  "logEntries": [ /* transparency log proofs */ ]
+}
+```
+
+== 4. Fields
+
+=== 4.1 mediaType (REQUIRED)
+
+MUST be `"application/vnd.verified-container.bundle+json"`.
+
+=== 4.2 version (REQUIRED)
+
+Semantic version of this specification. Currently `"0.1.0"`.
+
+=== 4.3 attestations (REQUIRED)
+
+Array of in-toto Statement objects. Each statement follows the https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md[in-toto Statement v1] specification.
+
+```json
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "registry.example.com/image:tag",
+      "digest": {
+        "sha256": "abc123..."
+      }
+    }
+  ],
+  "predicateType": "<predicate-type-uri>",
+  "predicate": { /* predicate-specific content */ }
+}
+```
+
+==== 4.3.1 Required Attestation Types
+
+A compliant bundle MUST include:
+
+[cols="2,3,2"]
+|===
+| Predicate Type | Description | Specification
+
+| `https://slsa.dev/provenance/v1`
+| Build provenance
+| https://slsa.dev/spec/v1.0/provenance[SLSA Provenance v1]
+
+| `https://spdx.dev/Document`
+| Software Bill of Materials
+| https://spdx.github.io/spdx-spec/v2.3/[SPDX 2.3]
+|===
+
+==== 4.3.2 Optional Attestation Types
+
+[cols="2,3"]
+|===
+| Predicate Type | Description
+
+| `https://verified-container.org/v1/source`
+| Upstream source verification
+
+| `https://verified-container.org/v1/review`
+| Human review attestation
+
+| `https://verified-container.org/v1/signature`
+| Threshold signature attestation
+|===
+
+=== 4.4 logEntries (REQUIRED)
+
+Array of transparency log inclusion proofs. At least 2 entries from different log operators MUST be present.
+
+```json
+{
+  "logId": "verified-container-log-1",
+  "logIndex": 12345,
+  "integratedTime": "2024-12-28T12:00:00Z",
+  "inclusionProof": {
+    "logIndex": 12345,
+    "rootHash": "abc123...",
+    "treeSize": 67890,
+    "hashes": ["def456...", "ghi789..."]
+  },
+  "signedEntryTimestamp": "base64-encoded-signature"
+}
+```
+
+==== 4.4.1 Log Entry Fields
+
+[cols="1,3"]
+|===
+| Field | Description
+
+| logId
+| Identifier of the transparency log operator
+
+| logIndex
+| Monotonic index within the log
+
+| integratedTime
+| ISO 8601 timestamp when entry was logged
+
+| inclusionProof
+| Merkle tree inclusion proof
+
+| signedEntryTimestamp
+| Log operator's signature over the entry
+|===
+
+== 5. Signature Envelope
+
+Each attestation in the bundle MUST be wrapped in a https://github.com/secure-systems-lab/dsse[DSSE] (Dead Simple Signing Envelope):
+
+```json
+{
+  "payloadType": "application/vnd.in-toto+json",
+  "payload": "<base64-encoded-statement>",
+  "signatures": [
+    {
+      "keyid": "sha256:abc123...",
+      "sig": "<base64-encoded-signature>"
+    }
+  ]
+}
+```
+
+== 6. Distribution
+
+Attestation bundles are attached to OCI images using the https://github.com/opencontainers/image-spec/blob/main/manifest.md#referrers-api[OCI Referrers API]:
+
+```json
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+  "artifactType": "application/vnd.verified-container.bundle+json",
+  "config": {
+    "mediaType": "application/vnd.oci.empty.v1+json",
+    "digest": "sha256:44136fa355b3...",
+    "size": 2
+  },
+  "layers": [
+    {
+      "mediaType": "application/vnd.verified-container.bundle+json",
+      "digest": "sha256:...",
+      "size": 12345
+    }
+  ],
+  "subject": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:...",
+    "size": 1234
+  }
+}
+```
+
+== 7. Verification Requirements
+
+A consumer MUST:
+
+1. Verify all signatures in the bundle against the trust store
+2. Verify at least 2 log inclusion proofs from different operators
+3. Verify all attestation subjects match the image digest
+4. Verify the threshold signature requirement is met
+
+A consumer MAY:
+
+* Cache verification results for a bounded time
+* Require additional attestation types beyond the minimum
+
+== 8. Example
+
+```json
+{
+  "mediaType": "application/vnd.verified-container.bundle+json",
+  "version": "0.1.0",
+  "attestations": [
+    {
+      "payloadType": "application/vnd.in-toto+json",
+      "payload": "eyJfdHlwZSI6Imh0dHBzOi8vaW4tdG90by5pby9TdGF0ZW1lbnQvdjEiLC4uLn0=",
+      "signatures": [
+        {
+          "keyid": "sha256:abc123...",
+          "sig": "MEUCIQDx..."
+        }
+      ]
+    }
+  ],
+  "logEntries": [
+    {
+      "logId": "verified-container-log-eu",
+      "logIndex": 12345,
+      "integratedTime": "2024-12-28T12:00:00Z",
+      "inclusionProof": {
+        "logIndex": 12345,
+        "rootHash": "abc123...",
+        "treeSize": 67890,
+        "hashes": ["def456...", "ghi789..."]
+      },
+      "signedEntryTimestamp": "MEUCIQD..."
+    },
+    {
+      "logId": "verified-container-log-us",
+      "logIndex": 54321,
+      "integratedTime": "2024-12-28T12:00:01Z",
+      "inclusionProof": {
+        "logIndex": 54321,
+        "rootHash": "xyz789...",
+        "treeSize": 98765,
+        "hashes": ["uvw123...", "rst456..."]
+      },
+      "signedEntryTimestamp": "MEQCIAo..."
+    }
+  ]
+}
+```
+
+== 9. Security Considerations
+
+=== 9.1 Replay Protection
+
+Log indices are monotonic. Consumers SHOULD track the highest seen index and reject entries with lower indices (rollback attack).
+
+=== 9.2 Time Attacks
+
+`integratedTime` is attested by the log operator. Consumers SHOULD verify timestamps are within acceptable bounds but MUST NOT rely solely on timestamps for freshness.
+
+=== 9.3 Key Compromise
+
+Threshold signatures (k-of-n) ensure no single key compromise is catastrophic. Trust store key rotation procedures are defined in link:trust-store.adoc[Trust Store].
+
+== 10. Changelog
+
+=== 0.1.0 (2024-12-28)
+- Initial specification

@@ -1,0 +1,252 @@
+= Verification Protocol
+:spec-version: 0.1.0
+:status: draft
+
+== 1. Overview
+
+This document defines the procedure for verifying a container image before execution. A compliant consumer MUST implement this protocol.
+
+== 2. Terminology
+
+Producer:: System that creates OCI images and attestation bundles (e.g., Cerro Torre)
+Consumer:: System that verifies and executes OCI images (e.g., Svalinn/Vordr)
+Trust Store:: Collection of public keys and policies (link:trust-store.adoc[spec])
+Attestation Bundle:: Packaged attestations with log proofs (link:attestation-bundle.adoc[spec])
+
+== 3. Verification Modes
+
+=== 3.1 Strict Mode
+
+All verification steps MUST pass. Any failure results in rejection.
+
+=== 3.2 Permissive Mode
+
+Verification is attempted. Failures result in warnings but execution proceeds. Recommended only for development/testing.
+
+=== 3.3 Audit Mode
+
+Verification is performed and logged but does not affect execution. Used for gradual rollout.
+
+== 4. Verification Procedure
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     VERIFICATION FLOWCHART                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│    ┌──────────────┐                                                     │
+│    │ Image Digest │                                                     │
+│    └──────┬───────┘                                                     │
+│           │                                                              │
+│           ▼                                                              │
+│    ┌──────────────┐     No      ┌─────────────────┐                    │
+│    │ Bundle       ├────────────►│ Mode Check      │                    │
+│    │ Found?       │             │ Strict? → REJECT│                    │
+│    └──────┬───────┘             │ Else → WARN     │                    │
+│           │ Yes                 └─────────────────┘                    │
+│           ▼                                                              │
+│    ┌──────────────┐     Fail    ┌─────────────────┐                    │
+│    │ Parse        ├────────────►│ REJECT          │                    │
+│    │ Bundle       │             │ (malformed)     │                    │
+│    └──────┬───────┘             └─────────────────┘                    │
+│           │ OK                                                          │
+│           ▼                                                              │
+│    ┌──────────────┐     Fail    ┌─────────────────┐                    │
+│    │ Verify       ├────────────►│ REJECT          │                    │
+│    │ Subject      │             │ (digest mismatch)│                   │
+│    └──────┬───────┘             └─────────────────┘                    │
+│           │ OK                                                          │
+│           ▼                                                              │
+│    ┌──────────────┐     Fail    ┌─────────────────┐                    │
+│    │ Verify       ├────────────►│ REJECT          │                    │
+│    │ Signatures   │             │ (invalid sig)   │                    │
+│    └──────┬───────┘             └─────────────────┘                    │
+│           │ OK                                                          │
+│           ▼                                                              │
+│    ┌──────────────┐     Fail    ┌─────────────────┐                    │
+│    │ Verify       ├────────────►│ REJECT          │                    │
+│    │ Log Proofs   │             │ (log failure)   │                    │
+│    └──────┬───────┘             └─────────────────┘                    │
+│           │ OK                                                          │
+│           ▼                                                              │
+│    ┌──────────────┐     Fail    ┌─────────────────┐                    │
+│    │ Verify       ├────────────►│ REJECT          │                    │
+│    │ Threshold    │             │ (threshold fail)│                    │
+│    └──────┬───────┘             └─────────────────┘                    │
+│           │ OK                                                          │
+│           ▼                                                              │
+│    ┌──────────────┐                                                     │
+│    │ ALLOW        │                                                     │
+│    └──────────────┘                                                     │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+== 5. Step-by-Step Protocol
+
+=== 5.1 Resolve Image Reference
+
+Input: Image reference (e.g., `registry.example.com/image:tag` or digest)
+
+1. If reference is a tag, resolve to digest
+2. Store the canonical digest: `sha256:<hex>`
+
+=== 5.2 Fetch Attestation Bundle
+
+1. Query OCI Referrers API for the image digest
+2. Filter for `artifactType: application/vnd.verified-container.bundle+json`
+3. If no bundle found:
+   - Strict mode: REJECT with `MISSING_ATTESTATION`
+   - Permissive mode: WARN and continue without verification
+4. Fetch the bundle blob
+5. Store for subsequent steps
+
+=== 5.3 Parse Bundle
+
+1. Validate JSON structure
+2. Verify `mediaType` matches expected value
+3. Verify `version` is supported
+4. Extract `attestations` and `logEntries` arrays
+5. If parsing fails: REJECT with `MALFORMED_BUNDLE`
+
+=== 5.4 Verify Subject Match
+
+For each attestation in the bundle:
+
+1. Extract `subject[].digest.sha256`
+2. Verify it matches the image digest from step 5.1
+3. If any mismatch: REJECT with `SUBJECT_MISMATCH`
+
+=== 5.5 Verify Signatures
+
+For each attestation:
+
+1. Extract signature from DSSE envelope
+2. Look up `keyid` in trust store
+3. If key not found: REJECT with `UNKNOWN_KEY`
+4. If key expired (`validUntil` in past): REJECT with `EXPIRED_KEY`
+5. If key not yet valid (`validFrom` in future): REJECT with `KEY_NOT_YET_VALID`
+6. Verify Ed25519 signature over payload
+7. If verification fails: REJECT with `INVALID_SIGNATURE`
+
+=== 5.6 Verify Log Inclusion
+
+1. Count distinct `logId` values in `logEntries`
+2. If fewer than 2 distinct logs: REJECT with `INSUFFICIENT_LOG_COVERAGE`
+3. For each log entry:
+   a. Look up log public key in trust store
+   b. Verify `signedEntryTimestamp` signature
+   c. Verify Merkle inclusion proof
+4. If any proof fails: REJECT with `LOG_PROOF_INVALID`
+
+=== 5.7 Verify Threshold Signature
+
+1. Identify the threshold group (e.g., `release-signers`)
+2. Count valid signatures from group members
+3. If count < k: REJECT with `THRESHOLD_NOT_MET`
+
+=== 5.8 Record Result
+
+1. Log verification result with:
+   - Image digest
+   - Bundle digest
+   - Timestamp
+   - Outcome (ALLOW/REJECT)
+   - Error code if rejected
+2. Return result to caller
+
+== 6. Error Codes
+
+[cols="2,3,2"]
+|===
+| Code | Meaning | Recovery
+
+| `MISSING_ATTESTATION`
+| No attestation bundle found
+| Obtain bundle from producer
+
+| `MALFORMED_BUNDLE`
+| Bundle JSON invalid or malformed
+| Report to producer; obtain new bundle
+
+| `SUBJECT_MISMATCH`
+| Attestation subject doesn't match image
+| Obtain correct bundle for this image
+
+| `UNKNOWN_KEY`
+| Signing key not in trust store
+| Update trust store
+
+| `EXPIRED_KEY`
+| Signing key has expired
+| Producer must re-sign with valid key
+
+| `KEY_NOT_YET_VALID`
+| Key's validFrom is in future
+| Wait or check system time
+
+| `INVALID_SIGNATURE`
+| Cryptographic signature invalid
+| Report to producer; possible tampering
+
+| `INSUFFICIENT_LOG_COVERAGE`
+| Fewer than 2 log operators
+| Producer must submit to more logs
+
+| `LOG_PROOF_INVALID`
+| Merkle proof doesn't verify
+| Report to log operator; possible tampering
+
+| `THRESHOLD_NOT_MET`
+| Fewer than k signatures
+| Producer must obtain more signatures
+|===
+
+== 7. Caching
+
+Consumers MAY cache verification results:
+
+* Cache key: image digest + trust store version
+* Cache duration: configurable, default 1 hour
+* Invalidation: trust store update, explicit flush
+
+Cache MUST be invalidated when:
+* Trust store is updated
+* A key is revoked
+* User requests fresh verification
+
+== 8. Offline Verification
+
+When network access is unavailable:
+
+1. Trust store MUST be pre-loaded
+2. Attestation bundle MUST be present (e.g., in local cache or sideloaded)
+3. Log inclusion proofs are verified against stored proofs (no network needed)
+4. Skip online freshness checks
+
+Offline verification provides the same security guarantees as online, given the bundle was previously verified online.
+
+== 9. Implementation Requirements
+
+=== 9.1 Cryptographic Operations
+
+All cryptographic operations SHOULD be implemented in:
+* Memory-safe language (Rust, Ada/SPARK)
+* Or use audited cryptographic libraries
+* Constant-time comparison for signatures
+
+=== 9.2 Formal Verification (RECOMMENDED)
+
+Security-critical verification code SHOULD be formally verified to prove:
+* Absence of runtime errors
+* Correct signature verification
+* No information leakage
+
+=== 9.3 Audit Logging
+
+All verification decisions MUST be logged with sufficient detail for forensic analysis.
+
+== 10. Changelog
+
+=== 0.1.0 (2024-12-28)
+- Initial specification
