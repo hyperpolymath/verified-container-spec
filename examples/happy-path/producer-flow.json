@@ -1,0 +1,163 @@
+{
+  "id": "producer-happy-path",
+  "description": "Complete producer workflow: build image, create attestations, submit to logs, attach bundle",
+  "flow": "producer",
+  "prerequisites": {
+    "builderKey": {
+      "id": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "algorithm": "ed25519",
+      "publicKey": "MCowBQYDK2VwAyEAGb9F2CMCwMPPBmrZJJNtFe0BzLXmVr3QBT7Q4joZt0Y="
+    },
+    "imageDigest": "sha256:abc123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd",
+    "imageRef": "registry.example.com/myapp:v1.0.0"
+  },
+  "steps": [
+    {
+      "step": 1,
+      "action": "Create SLSA Provenance attestation",
+      "input": {
+        "subject": {
+          "name": "registry.example.com/myapp:v1.0.0",
+          "digest": "sha256:abc123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
+        },
+        "predicateType": "https://slsa.dev/provenance/v1",
+        "predicate": {
+          "buildDefinition": {
+            "buildType": "https://example.com/builder/v1",
+            "externalParameters": {
+              "repository": "https://github.com/example/myapp",
+              "ref": "refs/tags/v1.0.0"
+            }
+          },
+          "runDetails": {
+            "builder": {
+              "id": "https://example.com/builder"
+            }
+          }
+        }
+      },
+      "output": {
+        "statement": "in-toto Statement v1 with SLSA Provenance"
+      }
+    },
+    {
+      "step": 2,
+      "action": "Create SBOM attestation",
+      "input": {
+        "subject": {
+          "name": "registry.example.com/myapp:v1.0.0",
+          "digest": "sha256:abc123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
+        },
+        "predicateType": "https://spdx.dev/Document",
+        "predicate": {
+          "spdxVersion": "SPDX-2.3",
+          "dataLicense": "CC0-1.0",
+          "SPDXID": "SPDXRef-DOCUMENT",
+          "name": "myapp-v1.0.0",
+          "packages": []
+        }
+      },
+      "output": {
+        "statement": "in-toto Statement v1 with SPDX SBOM"
+      }
+    },
+    {
+      "step": 3,
+      "action": "Sign attestations with DSSE",
+      "input": {
+        "statements": ["provenance statement", "sbom statement"],
+        "keyId": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      },
+      "output": {
+        "envelopes": [
+          {
+            "payloadType": "application/vnd.in-toto+json",
+            "payload": "base64-encoded-provenance",
+            "signatures": [{"keyid": "sha256:...", "sig": "base64-sig"}]
+          },
+          {
+            "payloadType": "application/vnd.in-toto+json",
+            "payload": "base64-encoded-sbom",
+            "signatures": [{"keyid": "sha256:...", "sig": "base64-sig"}]
+          }
+        ]
+      }
+    },
+    {
+      "step": 4,
+      "action": "Submit to transparency log (EU)",
+      "input": {
+        "logUrl": "https://log-eu.verified-container.org/api/v1/entries",
+        "envelope": "DSSE envelope"
+      },
+      "output": {
+        "logEntry": {
+          "logId": "verified-container-log-eu",
+          "logIndex": 12345,
+          "integratedTime": "2024-12-28T12:00:00Z",
+          "inclusionProof": {
+            "logIndex": 12345,
+            "rootHash": "sha256:...",
+            "treeSize": 67890,
+            "hashes": ["sha256:..."]
+          },
+          "signedEntryTimestamp": "base64-signature"
+        }
+      }
+    },
+    {
+      "step": 5,
+      "action": "Submit to transparency log (US)",
+      "input": {
+        "logUrl": "https://log-us.verified-container.org/api/v1/entries",
+        "envelope": "DSSE envelope"
+      },
+      "output": {
+        "logEntry": {
+          "logId": "verified-container-log-us",
+          "logIndex": 54321,
+          "integratedTime": "2024-12-28T12:00:01Z",
+          "inclusionProof": {
+            "logIndex": 54321,
+            "rootHash": "sha256:...",
+            "treeSize": 98765,
+            "hashes": ["sha256:..."]
+          },
+          "signedEntryTimestamp": "base64-signature"
+        }
+      }
+    },
+    {
+      "step": 6,
+      "action": "Create attestation bundle",
+      "input": {
+        "attestations": ["provenance envelope", "sbom envelope"],
+        "logEntries": ["EU log entry", "US log entry"]
+      },
+      "output": {
+        "bundle": {
+          "mediaType": "application/vnd.verified-container.bundle+json",
+          "version": "0.1.0",
+          "attestations": [],
+          "logEntries": []
+        }
+      }
+    },
+    {
+      "step": 7,
+      "action": "Attach bundle to image via OCI Referrers",
+      "input": {
+        "imageDigest": "sha256:abc123...",
+        "bundle": "attestation bundle"
+      },
+      "output": {
+        "referrerDigest": "sha256:def456...",
+        "status": "success"
+      }
+    }
+  ],
+  "expectedOutcome": {
+    "success": true,
+    "message": "Image published with attestation bundle attached"
+  }
+}

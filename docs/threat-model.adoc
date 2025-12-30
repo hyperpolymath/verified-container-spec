@@ -1,0 +1,443 @@
+= Threat Model
+:spec-version: 0.1.0
+:status: draft
+
+== 1. Scope
+
+This document defines the threat model for the Verified Container Specification. It identifies assets, threat actors, attack vectors, and mitigations.
+
+== 2. Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in https://datatracker.ietf.org/doc/html/rfc2119[RFC 2119].
+
+== 3. System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         SYSTEM TRUST BOUNDARIES                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ┌──────────────┐         ┌──────────────┐         ┌──────────────┐       │
+│   │   Source     │         │   Producer   │         │   Consumer   │       │
+│   │   Code       │────────►│   (Builder)  │────────►│  (Runtime)   │       │
+│   └──────────────┘         └──────┬───────┘         └──────┬───────┘       │
+│                                   │                        │                │
+│                           ┌───────▼────────┐       ┌───────▼────────┐      │
+│                           │  Transparency  │       │   Trust        │      │
+│                           │     Logs       │       │   Store        │      │
+│                           │  (Federated)   │       │  (Verified)    │      │
+│                           └────────────────┘       └────────────────┘      │
+│                                                                              │
+│   Trust Boundaries:                                                          │
+│   ─────────────── Producer boundary (build environment)                     │
+│   ═══════════════ Consumer boundary (runtime environment)                   │
+│   ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ Log operator boundary (semi-trusted)                     │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+== 4. Assets
+
+=== 4.1 Primary Assets
+
+[cols="2,3,2"]
+|===
+| Asset | Description | Sensitivity
+
+| Container Images
+| The software artifacts being protected
+| High
+
+| Signing Keys (Builder)
+| Ed25519 private keys for build attestations
+| Critical
+
+| Signing Keys (Threshold)
+| FROST shares for release signing
+| Critical
+
+| Trust Store
+| Collection of trusted public keys
+| High
+
+| Transparency Log Data
+| Append-only attestation record
+| High (integrity)
+|===
+
+=== 4.2 Secondary Assets
+
+[cols="2,3,2"]
+|===
+| Asset | Description | Sensitivity
+
+| Attestation Bundles
+| Packaged proofs of authenticity
+| Medium
+
+| Build Provenance
+| Record of how images were built
+| Medium
+
+| SBOM Data
+| Software component inventory
+| Low-Medium
+
+| Verification Results
+| Cached trust decisions
+| Medium
+|===
+
+== 5. Threat Actors
+
+=== 5.1 External Attackers
+
+[cols="2,2,3"]
+|===
+| Actor | Capability | Motivation
+
+| Script Kiddie
+| Low: Uses existing tools
+| Opportunistic attack, notoriety
+
+| Criminal Organization
+| Medium: Custom malware, social engineering
+| Financial gain, ransomware
+
+| Nation State
+| High: Zero-days, supply chain access
+| Espionage, sabotage
+
+| Competitor
+| Medium: Corporate espionage
+| Economic advantage
+|===
+
+=== 5.2 Insider Threats
+
+[cols="2,2,3"]
+|===
+| Actor | Capability | Motivation
+
+| Malicious Developer
+| High: Source code access
+| Sabotage, financial gain
+
+| Compromised Admin
+| Critical: Infrastructure access
+| Coerced or bribed
+
+| Rogue Log Operator
+| Medium: Single log control
+| Disruption, collusion
+|===
+
+== 6. Attack Vectors
+
+=== 6.1 Supply Chain Attacks
+
+[[T-SC-01]]
+==== T-SC-01: Malicious Source Code
+
+*Attack*: Attacker introduces backdoor into source repository.
+
+*Impact*: Compromised images distributed to consumers.
+
+*Mitigations*:
+* Code review attestations (human review)
+* Source verification attestations
+* SLSA provenance tracks source commit
+
+*Residual Risk*: Medium (sophisticated attacks may evade review)
+
+[[T-SC-02]]
+==== T-SC-02: Compromised Build Environment
+
+*Attack*: Attacker compromises builder infrastructure.
+
+*Impact*: Arbitrary code injection into images.
+
+*Mitigations*:
+* Hermetic builds (SLSA L3)
+* Build provenance attestation
+* Multiple independent builds (future)
+
+*Residual Risk*: Medium
+
+[[T-SC-03]]
+==== T-SC-03: Dependency Confusion
+
+*Attack*: Attacker registers malicious package with similar name.
+
+*Impact*: Malicious dependency included in build.
+
+*Mitigations*:
+* SBOM records all dependencies
+* Dependency verification in build
+* Reproducible builds
+
+*Residual Risk*: Low-Medium
+
+=== 6.2 Cryptographic Attacks
+
+[[T-CR-01]]
+==== T-CR-01: Key Compromise (Single Builder)
+
+*Attack*: Attacker obtains builder signing key.
+
+*Impact*: Can sign arbitrary attestations.
+
+*Mitigations*:
+* Threshold signatures for releases
+* Key rotation procedures
+* HSM storage for keys
+* Revocation via transparency log
+
+*Residual Risk*: Low (threshold prevents single-key catastrophe)
+
+[[T-CR-02]]
+==== T-CR-02: Threshold Key Compromise (k of n)
+
+*Attack*: Attacker obtains k threshold key shares.
+
+*Impact*: Can forge threshold signatures.
+
+*Mitigations*:
+* Geographically distributed keyholders
+* Hardware security modules
+* Ceremony auditing
+* Log entry creates audit trail
+
+*Residual Risk*: Low (requires coordinated compromise)
+
+[[T-CR-03]]
+==== T-CR-03: Algorithm Weakness
+
+*Attack*: Cryptographic break of Ed25519 or SHA-256.
+
+*Impact*: Forged signatures or hash collisions.
+
+*Mitigations*:
+* Use standard, well-reviewed algorithms
+* Algorithm agility in spec design
+* Monitor cryptographic research
+
+*Residual Risk*: Very Low (no known practical attacks)
+
+=== 6.3 Transparency Log Attacks
+
+[[T-TL-01]]
+==== T-TL-01: Single Log Operator Compromise
+
+*Attack*: Attacker compromises one log operator.
+
+*Impact*: Operator can equivocate or withhold entries.
+
+*Mitigations*:
+* 2-of-3 quorum requirement
+* Gossip protocol detects inconsistency
+* Multiple independent operators
+
+*Residual Risk*: Low
+
+[[T-TL-02]]
+==== T-TL-02: Log Equivocation (Split-View)
+
+*Attack*: Operator shows different views to different clients.
+
+*Impact*: Targeted clients see different attestation state.
+
+*Mitigations*:
+* Cross-operator verification
+* Gossip protocol
+* Client consistency checks
+* Witness network (future)
+
+*Residual Risk*: Low-Medium
+
+[[T-TL-03]]
+==== T-TL-03: Log Operator Collusion
+
+*Attack*: Multiple operators collude (2+ of 3).
+
+*Impact*: Can present false log state.
+
+*Mitigations*:
+* Operators in different jurisdictions
+* Different organizations
+* Public audit of signed tree heads
+* Witness monitoring (future)
+
+*Residual Risk*: Low (requires coordinated attack)
+
+=== 6.4 Trust Store Attacks
+
+[[T-TS-01]]
+==== T-TS-01: Trust Store Poisoning
+
+*Attack*: Attacker adds malicious key to trust store.
+
+*Impact*: Consumer trusts attacker's signatures.
+
+*Mitigations*:
+* Trust store update requires existing trusted key
+* Version monotonicity
+* Out-of-band distribution
+* Signature on trust store updates
+
+*Residual Risk*: Low
+
+[[T-TS-02]]
+==== T-TS-02: Trust Store Rollback
+
+*Attack*: Consumer receives old trust store version.
+
+*Impact*: Revoked keys appear valid.
+
+*Mitigations*:
+* Version field must be monotonic
+* Implementations track highest seen version
+* Timestamp validation
+
+*Residual Risk*: Low
+
+=== 6.5 Protocol Attacks
+
+[[T-PR-01]]
+==== T-PR-01: Replay Attack
+
+*Attack*: Attacker replays old valid attestation.
+
+*Impact*: Old/vulnerable image accepted.
+
+*Mitigations*:
+* Subject binding to specific digest
+* Log index monotonicity
+* Timestamp bounds checking
+
+*Residual Risk*: Very Low
+
+[[T-PR-02]]
+==== T-PR-02: Downgrade Attack
+
+*Attack*: Attacker forces use of older protocol version.
+
+*Impact*: May exploit fixed vulnerabilities.
+
+*Mitigations*:
+* Version negotiation not supported
+* Minimum version requirements
+* Consumer enforces current version
+
+*Residual Risk*: Very Low
+
+[[T-PR-03]]
+==== T-PR-03: Attestation Stripping
+
+*Attack*: Attacker removes attestation bundle from image.
+
+*Impact*: Image runs without verification.
+
+*Mitigations*:
+* Strict mode rejects missing attestations
+* Policy enforcement at consumer
+* Audit logging of verification failures
+
+*Residual Risk*: Very Low (in strict mode)
+
+=== 6.6 Operational Attacks
+
+[[T-OP-01]]
+==== T-OP-01: Denial of Service (Log)
+
+*Attack*: Attacker overwhelms transparency log.
+
+*Impact*: Producers cannot submit attestations.
+
+*Mitigations*:
+* Rate limiting
+* Multiple log operators
+* Queue-based submission
+
+*Residual Risk*: Medium
+
+[[T-OP-02]]
+==== T-OP-02: Denial of Service (Registry)
+
+*Attack*: Attacker overwhelms OCI registry.
+
+*Impact*: Cannot fetch attestation bundles.
+
+*Mitigations*:
+* Consumer-side caching
+* Offline verification mode
+* CDN distribution
+
+*Residual Risk*: Medium
+
+== 7. Security Requirements
+
+Based on the threat model, implementations MUST:
+
+[cols="1,3,2"]
+|===
+| ID | Requirement | Mitigates
+
+| SR-01
+| Verify Ed25519 signatures using constant-time comparison
+| T-CR-01, T-CR-02
+
+| SR-02
+| Require at least 2 log operator proofs
+| T-TL-01, T-TL-03
+
+| SR-03
+| Validate trust store version monotonicity
+| T-TS-02
+
+| SR-04
+| Bind attestation subject to image digest
+| T-PR-01
+
+| SR-05
+| Reject unknown major versions
+| T-PR-02
+
+| SR-06
+| Log all verification decisions
+| T-OP-*, forensics
+
+| SR-07
+| Support offline verification
+| T-OP-02
+
+| SR-08
+| Implement threshold signature verification
+| T-CR-01
+|===
+
+== 8. Trust Assumptions
+
+This specification assumes:
+
+1. *Cryptographic Primitives*: Ed25519, SHA-256, and FROST are secure
+2. *Log Operator Independence*: At least 2 of 3 operators are honest
+3. *Threshold Keyholder Independence*: Fewer than k keyholders are compromised
+4. *Trust Store Bootstrapping*: Initial trust store is obtained securely
+5. *Time*: System clocks are reasonably synchronized
+
+== 9. Out of Scope
+
+The following are explicitly out of scope:
+
+* Runtime container security (sandboxing, isolation)
+* Network security between components
+* Physical security of signing keys
+* Secure boot and platform integrity
+* User authentication and authorization
+* Vulnerability scanning and CVE management
+
+== 10. Changelog
+
+=== 0.1.0 (2024-12-28)
+- Initial threat model

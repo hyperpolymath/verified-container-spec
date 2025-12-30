@@ -1,0 +1,245 @@
+= Canonicalization
+:spec-version: 0.1.0
+:status: draft
+
+== 1. Scope
+
+This document defines canonicalization rules for JSON documents in the Verified Container Specification. Canonicalization ensures that semantically equivalent documents produce identical byte sequences for signing and hashing.
+
+== 2. Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in https://datatracker.ietf.org/doc/html/rfc2119[RFC 2119].
+
+Canonical Form:: A deterministic byte representation of a JSON document.
+Payload:: The data being signed or hashed.
+Wire Format:: The format used for transmission and storage.
+
+== 3. Overview
+
+This specification uses a simplified canonicalization based on https://datatracker.ietf.org/doc/html/rfc8785[RFC 8785 (JCS - JSON Canonicalization Scheme)] with the following rules:
+
+1. Object keys are sorted lexicographically
+2. No whitespace between tokens
+3. UTF-8 encoding
+4. Specific number formatting
+
+== 4. Canonicalization Rules
+
+=== 4.1 Object Key Ordering
+
+Object members MUST be sorted by key in lexicographic (byte-value) order:
+
+```json
+// Input
+{"z": 1, "a": 2, "m": 3}
+
+// Canonical
+{"a":2,"m":3,"z":1}
+```
+
+=== 4.2 Whitespace
+
+All optional whitespace MUST be removed:
+
+* No space after `:` in objects
+* No space after `,` in arrays and objects
+* No newlines or indentation
+
+```json
+// Input
+{
+  "key": "value",
+  "array": [1, 2, 3]
+}
+
+// Canonical
+{"array":[1,2,3],"key":"value"}
+```
+
+=== 4.3 String Encoding
+
+Strings MUST be encoded as follows:
+
+* UTF-8 encoding
+* Minimal escape sequences
+* Required escapes: `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`
+* Control characters (U+0000-U+001F) MUST be escaped as `\uXXXX`
+* Forward slash (`/`) SHOULD NOT be escaped
+* Non-ASCII characters SHOULD be literal UTF-8, not escaped
+
+```json
+// Input
+"Hello\u0020World"
+
+// Canonical
+"Hello World"
+```
+
+=== 4.4 Number Formatting
+
+Numbers MUST be formatted as follows:
+
+* No leading zeros (except `0.x`)
+* No trailing zeros after decimal point
+* No positive sign prefix
+* Exponential notation: lowercase `e`, no positive exponent sign
+* Integer values: no decimal point
+
+```json
+// Inputs → Canonical
++5        → 5
+5.0       → 5
+5.00      → 5
+0.50      → 0.5
+1.0E+10   → 1e10
+1.0e-10   → 1e-10
+```
+
+=== 4.5 Boolean and Null
+
+* Boolean values: `true` or `false` (lowercase)
+* Null value: `null` (lowercase)
+
+=== 4.6 Array Ordering
+
+Array element order MUST be preserved (arrays are NOT sorted):
+
+```json
+// Input
+[3, 1, 2]
+
+// Canonical
+[3,1,2]
+```
+
+=== 4.7 Unicode Normalization
+
+This specification does NOT require Unicode normalization. Strings are compared byte-by-byte after UTF-8 encoding.
+
+== 5. Algorithm
+
+```
+function canonicalize(value):
+    if value is null:
+        return "null"
+    if value is boolean:
+        return value ? "true" : "false"
+    if value is number:
+        return format_number(value)
+    if value is string:
+        return format_string(value)
+    if value is array:
+        return "[" + join(map(canonicalize, value), ",") + "]"
+    if value is object:
+        keys = sorted(object_keys(value))
+        members = []
+        for key in keys:
+            members.append(format_string(key) + ":" + canonicalize(value[key]))
+        return "{" + join(members, ",") + "}"
+```
+
+== 6. Contexts Where Canonicalization Applies
+
+=== 6.1 DSSE Payload
+
+When computing DSSE signatures, the in-toto statement MUST be canonicalized before Base64 encoding:
+
+```
+payload = base64(canonicalize(statement))
+signature = sign(PAE(payloadType, payload))
+```
+
+=== 6.2 Attestation Digest
+
+When computing the digest of an attestation for log entries:
+
+```
+attestationDigest = sha256(canonicalize(dsseEnvelope))
+```
+
+=== 6.3 Trust Store Updates
+
+Trust store documents MUST be canonicalized before signing:
+
+```
+signature = sign(canonicalize(trustStore))
+```
+
+== 7. Wire Format vs. Canonical Form
+
+=== 7.1 Wire Format
+
+Wire format documents (stored/transmitted) MAY contain:
+
+* Whitespace for readability
+* Any valid key ordering
+* Various number representations
+
+=== 7.2 Canonical Form
+
+Canonical form is used ONLY for:
+
+* Signature computation
+* Digest computation
+* Equality comparison
+
+Implementations MUST NOT reject valid wire format documents with non-canonical formatting.
+
+== 8. Verification
+
+To verify a signature:
+
+1. Parse the wire format document
+2. Canonicalize the parsed structure
+3. Compute signature over canonical bytes
+4. Compare with provided signature
+
+== 9. Test Vectors
+
+See `vectors/canonicalization/` for test cases including:
+
+* `basic-ordering.json` - Key sorting
+* `whitespace.json` - Whitespace removal
+* `numbers.json` - Number formatting
+* `strings.json` - String encoding
+* `nested.json` - Nested structures
+* `unicode.json` - Unicode handling
+
+Each test vector contains:
+
+```json
+{
+  "description": "Test case description",
+  "input": { /* input JSON */ },
+  "canonical": "...",
+  "digest": "sha256:..."
+}
+```
+
+== 10. Security Considerations
+
+=== 10.1 Canonicalization Attacks
+
+Inconsistent canonicalization can lead to:
+
+* Signature bypass if verifier uses different rules
+* Hash collisions if digest computed differently
+
+Mitigations:
+
+* Use this specification's exact rules
+* Validate with test vectors
+* Round-trip test (parse → canonicalize → parse → canonicalize)
+
+=== 10.2 Number Precision
+
+JSON numbers have arbitrary precision but implementations may use IEEE 754 doubles. For this specification:
+
+* Integers up to 2^53 are safe
+* Avoid floating-point in security-critical fields
+* Use strings for arbitrary-precision values
+
+== 11. Changelog
+
+=== 0.1.0 (2024-12-28)
+- Initial specification

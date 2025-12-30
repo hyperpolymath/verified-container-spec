@@ -1,0 +1,386 @@
+= Surface Contract
+:spec-version: 0.1.0
+:status: draft
+
+== 1. Scope
+
+This document defines the stability guarantees for the Verified Container Specification's external interfaces. It distinguishes between stable surfaces that maintain backwards compatibility and experimental surfaces that may change without notice.
+
+== 2. Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in https://datatracker.ietf.org/doc/html/rfc2119[RFC 2119].
+
+Stable:: A surface that maintains backwards compatibility according to link:../spec/versioning.adoc[versioning rules].
+Experimental:: A surface that may change or be removed without notice.
+Internal:: A surface not intended for external use.
+Deprecated:: A stable surface scheduled for removal in a future major version.
+
+== 3. Producer Seam
+
+The producer seam defines interfaces used by systems that create verified container artifacts (e.g., Cerro Torre).
+
+=== 3.1 Stable Surfaces
+
+[cols="2,2,2,2"]
+|===
+| Surface | Type | Since | Notes
+
+| Attestation Bundle Format
+| Wire Format
+| v0.1.0
+| `application/vnd.verified-container.bundle+json`
+
+| Trust Store Format
+| Wire Format
+| v0.1.0
+| `application/vnd.verified-container.trust-store+json`
+
+| DSSE Envelope Structure
+| Wire Format
+| v0.1.0
+| Standard DSSE with Ed25519
+
+| OCI Referrers API Usage
+| Integration
+| v0.1.0
+| Attestation distribution via OCI
+
+| Transparency Log Submit API
+| HTTP API
+| v0.1.0
+| `POST /api/v1/entries`
+
+| In-toto Statement v1
+| Wire Format
+| v0.1.0
+| External dependency
+
+| SLSA Provenance v1
+| Predicate Type
+| v0.1.0
+| External dependency
+
+| SPDX 2.3 SBOM
+| Predicate Type
+| v0.1.0
+| External dependency
+|===
+
+=== 3.2 Experimental Surfaces
+
+[cols="2,2,2"]
+|===
+| Surface | Type | Notes
+
+| `experimental_` prefixed fields
+| Wire Format
+| May be removed without notice
+
+| Custom predicate types
+| Wire Format
+| Registry not yet defined
+
+| Batch submission API
+| HTTP API
+| Under consideration
+|===
+
+=== 3.3 Internal Surfaces
+
+[cols="2,2"]
+|===
+| Surface | Notes
+
+| Build cache format
+| Implementation-specific
+
+| Key storage format
+| Implementation-specific
+
+| Internal attestation queue
+| Not part of spec
+|===
+
+== 4. Consumer Seam
+
+The consumer seam defines interfaces used by systems that verify and execute containers (e.g., Svalinn/Vordr).
+
+=== 4.1 Stable Surfaces
+
+[cols="2,2,2,2"]
+|===
+| Surface | Type | Since | Notes
+
+| Verification Protocol
+| Procedure
+| v0.1.0
+| Step-by-step verification
+
+| Error Codes
+| API
+| v0.1.0
+| 10 defined error codes
+
+| Verification Modes
+| Configuration
+| v0.1.0
+| Strict, Permissive, Audit
+
+| Trust Store Validation
+| Procedure
+| v0.1.0
+| Key lookup and validation
+
+| Merkle Proof Verification
+| Algorithm
+| v0.1.0
+| SHA-256 based proofs
+
+| Ed25519 Signature Verification
+| Algorithm
+| v0.1.0
+| RFC 8032 compliant
+
+| Transparency Log Proof API
+| HTTP API
+| v0.1.0
+| `GET /api/v1/proof`
+
+| Signed Tree Head API
+| HTTP API
+| v0.1.0
+| `GET /api/v1/sth`
+|===
+
+=== 4.2 Experimental Surfaces
+
+[cols="2,2,2"]
+|===
+| Surface | Type | Notes
+
+| Offline verification hints
+| Wire Format
+| May change structure
+
+| Cache invalidation signals
+| API
+| Under design
+
+| Policy expression language
+| Configuration
+| Future consideration
+|===
+
+=== 4.3 Internal Surfaces
+
+[cols="2,2"]
+|===
+| Surface | Notes
+
+| Verification cache format
+| Implementation-specific
+
+| Audit log format
+| Implementation-specific
+
+| Runtime policy engine
+| Not part of spec
+|===
+
+== 5. Transparency Log Seam
+
+The transparency log seam defines interfaces for log operators.
+
+=== 5.1 Stable Surfaces
+
+[cols="2,2,2,2"]
+|===
+| Surface | Type | Since | Notes
+
+| Log Entry Format
+| Wire Format
+| v0.1.0
+| Attestation and revocation entries
+
+| Signed Tree Head Format
+| Wire Format
+| v0.1.0
+| Periodic state snapshots
+
+| Inclusion Proof Format
+| Wire Format
+| v0.1.0
+| Merkle path proofs
+
+| Submit Entry API
+| HTTP API
+| v0.1.0
+| `POST /api/v1/entries`
+
+| Get Proof API
+| HTTP API
+| v0.1.0
+| `GET /api/v1/proof`
+
+| Get STH API
+| HTTP API
+| v0.1.0
+| `GET /api/v1/sth`
+|===
+
+=== 5.2 Experimental Surfaces
+
+[cols="2,2,2"]
+|===
+| Surface | Type | Notes
+
+| Gossip Protocol
+| P2P
+| Operator coordination
+
+| Consistency Proof API
+| HTTP API
+| Under consideration
+
+| Batch proof retrieval
+| HTTP API
+| Under consideration
+|===
+
+== 6. Compatibility Matrix
+
+This matrix shows which surfaces MUST be supported for each conformance profile.
+
+[cols="2,1,1,1"]
+|===
+| Surface | Producer | Consumer | Log Operator
+
+| Attestation Bundle Format
+| REQUIRED
+| REQUIRED
+| MAY
+
+| Trust Store Format
+| REQUIRED
+| REQUIRED
+| MAY
+
+| Verification Protocol
+| MAY
+| REQUIRED
+| MAY
+
+| Log Entry Format
+| REQUIRED
+| REQUIRED
+| REQUIRED
+
+| Submit Entry API
+| REQUIRED
+| MAY
+| REQUIRED
+
+| Get Proof API
+| MAY
+| REQUIRED
+| REQUIRED
+|===
+
+== 7. Change Control
+
+=== 7.1 Stable Surface Changes
+
+Changes to stable surfaces:
+
+* MUST follow link:../spec/versioning.adoc[versioning rules]
+* MUST include backwards compatibility analysis
+* MUST include security impact analysis
+* MUST be reviewed by at least two maintainers
+* MUST update affected schemas and vectors
+
+=== 7.2 Experimental Surface Changes
+
+Changes to experimental surfaces:
+
+* SHOULD be announced in release notes
+* MAY occur in any release
+* SHOULD include migration guidance if breaking
+
+=== 7.3 Promoting to Stable
+
+An experimental surface becomes stable when:
+
+1. Implementation exists in at least two independent codebases
+2. No breaking changes for at least one minor version
+3. Test vectors exist with full coverage
+4. Security review completed
+5. Maintainer consensus reached
+
+=== 7.4 Deprecating Stable Surfaces
+
+A stable surface may be deprecated when:
+
+1. Replacement surface is available
+2. Security or design flaw identified
+3. Migration path is documented
+
+See link:../spec/versioning.adoc#_deprecation_policy[Deprecation Policy] for timeline.
+
+== 8. CI Enforcement
+
+The following CI checks enforce surface stability:
+
+[cols="2,3"]
+|===
+| Check | Description
+
+| `schema-breaking-change`
+| Detects breaking changes to JSON schemas
+
+| `api-breaking-change`
+| Detects breaking changes to API signatures
+
+| `wire-format-compatibility`
+| Validates new documents against old schemas
+
+| `deprecation-timeline`
+| Ensures deprecated items have removal date
+|===
+
+=== 8.1 Pull Request Labels
+
+PRs affecting surfaces must be labeled:
+
+* `stable-surface-change` - Changes to stable surface
+* `experimental-surface` - Changes to experimental surface
+* `breaking-change` - Breaking change (triggers additional review)
+* `deprecation` - Adds deprecation notice
+
+== 9. Security Considerations
+
+=== 9.1 Surface Enumeration
+
+* All stable surfaces are public and documented
+* Experimental surfaces SHOULD be documented
+* Internal surfaces SHOULD NOT be relied upon
+
+=== 9.2 Version Pinning
+
+Implementations SHOULD:
+
+* Pin to specific spec versions
+* Test against multiple versions during migration
+* Monitor for security advisories
+
+=== 9.3 Trust Boundaries
+
+Each seam represents a trust boundary:
+
+* Producer seam: Build systems are trusted within policy
+* Consumer seam: Verification establishes trust
+* Log seam: Operators are semi-trusted (quorum required)
+
+== 10. Changelog
+
+=== 0.1.0 (2024-12-28)
+- Initial specification

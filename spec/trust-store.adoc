@@ -3,17 +3,39 @@
 :status: draft
 :media-type: application/vnd.verified-container.trust-store+json
 
-== 1. Overview
+== 1. Scope
+
+This document defines the format for trust stores in the Verified Container Specification. It covers:
+
+* The structure and required fields of a trust store
+* Key management and role-based key organization
+* Threshold signature group definitions
+* Transparency log operator registration
+* Trust store update procedures
+
+This document does NOT cover:
+
+* Attestation bundle format (see link:attestation-bundle.adoc[Attestation Bundle Format])
+* Verification procedures (see link:verification-protocol.adoc[Verification Protocol])
+* Transparency log operation (see link:transparency-log.adoc[Transparency Log Requirements])
+
+== 2. Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in https://datatracker.ietf.org/doc/html/rfc2119[RFC 2119].
+
+See link:../docs/glossary.adoc[Glossary] for definitions of terms used throughout this specification.
+
+== 3. Overview
 
 A trust store contains public keys and policies for verifying attestation bundles. Both producers and consumers maintain trust stores, which may have overlapping content but are independently managed.
 
-== 2. Media Type
+== 4. Media Type
 
 ```
 application/vnd.verified-container.trust-store+json
 ```
 
-== 3. Structure
+== 5. Structure
 
 ```json
 {
@@ -27,25 +49,25 @@ application/vnd.verified-container.trust-store+json
 }
 ```
 
-== 4. Fields
+== 6. Fields
 
-=== 4.1 $schema (RECOMMENDED)
+=== 6.1 $schema (RECOMMENDED)
 
 JSON Schema URI for validation.
 
-=== 4.2 version (REQUIRED)
+=== 6.2 version (REQUIRED)
 
 Integer version of this trust store format. Currently `1`.
 
-=== 4.3 id (REQUIRED)
+=== 6.3 id (REQUIRED)
 
 Unique identifier for this trust store. Used for update verification.
 
-=== 4.4 updated (REQUIRED)
+=== 6.4 updated (REQUIRED)
 
 ISO 8601 timestamp of last update.
 
-=== 4.5 keys (REQUIRED)
+=== 6.5 keys (REQUIRED)
 
 Object mapping roles to arrays of key entries.
 
@@ -60,7 +82,7 @@ Object mapping roles to arrays of key entries.
 }
 ```
 
-==== 4.5.1 Key Entry Structure
+==== 6.5.1 Key Entry Structure
 
 ```json
 {
@@ -105,7 +127,7 @@ Object mapping roles to arrays of key entries.
 | Additional information about the key.
 |===
 
-=== 4.6 thresholds (REQUIRED)
+=== 6.6 thresholds (REQUIRED)
 
 Object defining threshold signature groups.
 
@@ -149,7 +171,7 @@ Object defining threshold signature groups.
 | Array of key IDs that are members of this group.
 |===
 
-=== 4.7 logs (REQUIRED)
+=== 6.7 logs (REQUIRED)
 
 Object defining trusted transparency log operators.
 
@@ -172,9 +194,9 @@ Object defining trusted transparency log operators.
 }
 ```
 
-== 5. Trust Store Updates
+== 7. Trust Store Updates
 
-=== 5.1 Update Format
+=== 7.1 Update Format
 
 Trust store updates are distributed as signed documents:
 
@@ -191,14 +213,14 @@ Trust store updates are distributed as signed documents:
 }
 ```
 
-=== 5.2 Update Requirements
+=== 7.2 Update Requirements
 
 1. Updates MUST be signed by a key in the `trust-store-updaters` role
 2. The `version` field MUST be greater than the current version
 3. The `updated` timestamp MUST be later than the current timestamp
 4. Key removals SHOULD include a grace period for propagation
 
-=== 5.3 Key Rotation
+=== 7.3 Key Rotation
 
 When rotating keys:
 
@@ -210,7 +232,7 @@ When rotating keys:
 6. Distribute update
 7. After `validUntil` passes, remove old key
 
-== 6. Minimum Requirements
+== 8. Minimum Requirements
 
 A compliant trust store MUST contain:
 
@@ -218,7 +240,7 @@ A compliant trust store MUST contain:
 * At least 1 threshold group in `thresholds`
 * At least 3 log operators in `logs` (for 2-of-3 quorum)
 
-== 7. Example
+== 9. Example
 
 ```json
 {
@@ -315,9 +337,9 @@ A compliant trust store MUST contain:
 }
 ```
 
-== 8. Security Considerations
+== 10. Security Considerations
 
-=== 8.1 Trust Store Distribution
+=== 10.1 Trust Store Distribution
 
 Trust stores SHOULD be distributed via:
 * HTTPS with certificate pinning
@@ -328,11 +350,11 @@ Trust stores SHOULD NOT be fetched from:
 * The same registry as the images being verified
 * Unauthenticated channels
 
-=== 8.2 Offline Operation
+=== 10.2 Offline Operation
 
 Systems operating offline MUST have a pre-loaded trust store. The `validUntil` fields allow graceful degradation when updates cannot be fetched.
 
-=== 8.3 Compromise Recovery
+=== 10.3 Compromise Recovery
 
 If a key is compromised:
 
@@ -341,7 +363,7 @@ If a key is compromised:
 3. Re-sign affected packages with remaining valid keys
 4. If threshold group compromised (k keys), rotate entire group
 
-== 9. Changelog
+== 11. Changelog
 
 === 0.1.0 (2024-12-28)
 - Initial specification

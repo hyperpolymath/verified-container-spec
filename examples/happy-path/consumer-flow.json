@@ -1,0 +1,138 @@
+{
+  "id": "consumer-happy-path",
+  "description": "Complete consumer verification workflow: fetch bundle, verify signatures, check logs, allow execution",
+  "flow": "consumer",
+  "prerequisites": {
+    "trustStore": {
+      "version": 1,
+      "id": "example-trust-store",
+      "keys": {
+        "builders": [
+          {
+            "id": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "algorithm": "ed25519",
+            "publicKey": "MCowBQYDK2VwAyEAGb9F2CMCwMPPBmrZJJNtFe0BzLXmVr3QBT7Q4joZt0Y=",
+            "validFrom": "2024-01-01T00:00:00Z"
+          }
+        ]
+      },
+      "thresholds": {
+        "release-signers": {
+          "k": 1,
+          "n": 1,
+          "algorithm": "frost-ed25519",
+          "members": ["sha256:0123..."]
+        }
+      },
+      "logs": {}
+    },
+    "imageRef": "registry.example.com/myapp@sha256:abc123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd",
+    "mode": "strict"
+  },
+  "steps": [
+    {
+      "step": 1,
+      "action": "Resolve image reference to digest",
+      "input": {
+        "imageRef": "registry.example.com/myapp:v1.0.0"
+      },
+      "output": {
+        "imageDigest": "sha256:abc123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
+      }
+    },
+    {
+      "step": 2,
+      "action": "Fetch attestation bundle via OCI Referrers API",
+      "input": {
+        "imageDigest": "sha256:abc123...",
+        "artifactType": "application/vnd.verified-container.bundle+json"
+      },
+      "output": {
+        "bundle": {
+          "mediaType": "application/vnd.verified-container.bundle+json",
+          "version": "0.1.0",
+          "attestations": [],
+          "logEntries": []
+        }
+      }
+    },
+    {
+      "step": 3,
+      "action": "Parse and validate bundle structure",
+      "input": {
+        "bundle": "fetched bundle"
+      },
+      "output": {
+        "valid": true,
+        "attestationCount": 2,
+        "logEntryCount": 2
+      }
+    },
+    {
+      "step": 4,
+      "action": "Verify subject match for each attestation",
+      "input": {
+        "attestations": "bundle attestations",
+        "expectedDigest": "sha256:abc123..."
+      },
+      "output": {
+        "allMatch": true
+      }
+    },
+    {
+      "step": 5,
+      "action": "Verify signatures against trust store",
+      "input": {
+        "attestations": "bundle attestations",
+        "trustStore": "loaded trust store"
+      },
+      "output": {
+        "validSignatures": 2,
+        "keyIds": ["sha256:0123..."]
+      }
+    },
+    {
+      "step": 6,
+      "action": "Verify log inclusion proofs",
+      "input": {
+        "logEntries": "bundle log entries",
+        "trustStore": "loaded trust store"
+      },
+      "output": {
+        "distinctLogs": 2,
+        "allProofsValid": true
+      }
+    },
+    {
+      "step": 7,
+      "action": "Verify threshold signature requirement",
+      "input": {
+        "attestations": "bundle attestations",
+        "thresholdGroup": "release-signers",
+        "requiredK": 1
+      },
+      "output": {
+        "validSigners": 1,
+        "thresholdMet": true
+      }
+    },
+    {
+      "step": 8,
+      "action": "Record verification result",
+      "input": {
+        "imageDigest": "sha256:abc123...",
+        "bundleDigest": "sha256:def456...",
+        "outcome": "ALLOW"
+      },
+      "output": {
+        "logged": true,
+        "cacheKey": "sha256:abc123..._v1"
+      }
+    }
+  ],
+  "expectedOutcome": {
+    "success": true,
+    "decision": "ALLOW",
+    "message": "Image verified successfully, execution permitted"
+  }
+}

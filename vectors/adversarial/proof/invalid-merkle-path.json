@@ -1,0 +1,27 @@
+{
+  "id": "adversarial-proof-001",
+  "description": "Inclusion proof with incorrect hash path",
+  "specSection": "transparency-log.adoc#3.1",
+  "category": "adversarial",
+  "input": {
+    "logId": "verified-container-log-eu",
+    "logIndex": 5,
+    "integratedTime": "2024-12-28T12:00:00Z",
+    "inclusionProof": {
+      "logIndex": 5,
+      "rootHash": "abc123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd",
+      "treeSize": 8,
+      "hashes": [
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000000"
+      ]
+    },
+    "signedEntryTimestamp": "TUVVQ0lRRHg="
+  },
+  "expected": {
+    "valid": false,
+    "errorCode": "LOG_PROOF_INVALID",
+    "notes": "The proof hashes are all zeros and will not compute to the claimed root"
+  }
+}

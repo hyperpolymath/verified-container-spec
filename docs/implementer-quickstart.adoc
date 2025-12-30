@@ -1,0 +1,455 @@
+= Implementer Quickstart Guide
+:spec-version: 0.1.0
+:status: draft
+:toc: left
+:toclevels: 2
+
+== Introduction
+
+This guide helps implementers build producer and consumer systems that conform to the Verified Container Specification. By the end of this guide, you will understand how to:
+
+* Create attestation bundles (producer)
+* Verify attestation bundles (consumer)
+* Submit entries to transparency logs
+* Pass Basic/Moderate conformance tests
+
+== Prerequisites
+
+=== Required Knowledge
+
+* JSON processing and schema validation
+* Cryptographic primitives (Ed25519 signatures, SHA-256)
+* OCI (Open Container Initiative) concepts
+* HTTP API design
+
+=== Recommended Libraries
+
+[cols="2,3"]
+|===
+| Language | Libraries
+
+| Rust
+| `ed25519-dalek`, `sha2`, `oci-distribution`, `serde_json`
+
+| Go
+| `crypto/ed25519`, `crypto/sha256`, `google/go-containerregistry`
+
+| Python
+| `cryptography`, `hashlib`, `python-oci`
+|===
+
+== Part 1: Producer Implementation
+
+=== Step 1.1: Generate Signing Keys
+
+Generate an Ed25519 key pair for signing attestations:
+
+```bash
+# Example using OpenSSL
+openssl genpkey -algorithm ED25519 -out builder.key
+openssl pkey -in builder.key -pubout -out builder.pub
+```
+
+Compute the key ID (SHA-256 of public key):
+
+```python
+import hashlib
+import base64
+
+# Load DER-encoded public key
+pub_key_bytes = load_public_key_der("builder.pub")
+key_id = "sha256:" + hashlib.sha256(pub_key_bytes).hexdigest()
+```
+
+=== Step 1.2: Create In-toto Statement
+
+Build the in-toto Statement v1 structure:
+
+```json
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "registry.example.com/myapp",
+      "digest": {
+        "sha256": "abc123def456..."
+      }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://example.com/builder/v1",
+      "externalParameters": {
+        "repository": "https://github.com/org/repo",
+        "ref": "refs/heads/main"
+      }
+    },
+    "runDetails": {
+      "builder": {
+        "id": "https://example.com/builder"
+      }
+    }
+  }
+}
+```
+
+=== Step 1.3: Wrap in DSSE Envelope
+
+Sign the statement and wrap in DSSE:
+
+```python
+import json
+import base64
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+def create_dsse_envelope(statement: dict, private_key: Ed25519PrivateKey, key_id: str) -> dict:
+    payload = base64.b64encode(
+        json.dumps(statement).encode()
+    ).decode()
+
+    # DSSE PAE (Pre-Authentication Encoding)
+    pae = f"DSSEv1 {len('application/vnd.in-toto+json')} application/vnd.in-toto+json {len(payload)} {payload}"
+
+    signature = private_key.sign(pae.encode())
+
+    return {
+        "payloadType": "application/vnd.in-toto+json",
+        "payload": payload,
+        "signatures": [
+            {
+                "keyid": key_id,
+                "sig": base64.b64encode(signature).decode()
+            }
+        ]
+    }
+```
+
+=== Step 1.4: Submit to Transparency Logs
+
+Submit the signed attestation to at least 2 log operators:
+
+```python
+import httpx
+
+def submit_to_log(log_url: str, dsse_envelope: dict) -> dict:
+    attestation_b64 = base64.b64encode(
+        json.dumps(dsse_envelope).encode()
+    ).decode()
+
+    response = httpx.post(
+        f"{log_url}/api/v1/entries",
+        json={"attestation": attestation_b64}
+    )
+    response.raise_for_status()
+    return response.json()
+
+# Submit to multiple operators
+log_entry_eu = submit_to_log("https://log-eu.verified-container.org", envelope)
+log_entry_us = submit_to_log("https://log-us.verified-container.org", envelope)
+```
+
+=== Step 1.5: Create Attestation Bundle
+
+Combine attestations and log entries:
+
+```python
+def create_bundle(attestations: list, log_entries: list) -> dict:
+    return {
+        "mediaType": "application/vnd.verified-container.bundle+json",
+        "version": "0.1.0",
+        "attestations": attestations,
+        "logEntries": log_entries
+    }
+
+bundle = create_bundle(
+    attestations=[provenance_envelope, sbom_envelope],
+    log_entries=[log_entry_eu, log_entry_us]
+)
+```
+
+=== Step 1.6: Attach to OCI Image
+
+Use the OCI Referrers API to attach the bundle:
+
+```python
+from oci_client import Client
+
+def attach_bundle(client: Client, image_ref: str, bundle: dict) -> str:
+    # Upload bundle as blob
+    bundle_bytes = json.dumps(bundle).encode()
+    bundle_digest = client.upload_blob(bundle_bytes)
+
+    # Create referrer manifest
+    manifest = {
+        "schemaVersion": 2,
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "artifactType": "application/vnd.verified-container.bundle+json",
+        "config": {
+            "mediaType": "application/vnd.oci.empty.v1+json",
+            "digest": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "size": 2
+        },
+        "layers": [
+            {
+                "mediaType": "application/vnd.verified-container.bundle+json",
+                "digest": bundle_digest,
+                "size": len(bundle_bytes)
+            }
+        ],
+        "subject": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": image_digest,
+            "size": image_manifest_size
+        }
+    }
+
+    return client.push_manifest(manifest)
+```
+
+== Part 2: Consumer Implementation
+
+=== Step 2.1: Load Trust Store
+
+Parse and validate the trust store:
+
+```python
+import jsonschema
+
+def load_trust_store(path: str) -> dict:
+    with open(path) as f:
+        trust_store = json.load(f)
+
+    # Validate against schema
+    schema = load_schema("trust-store.schema.json")
+    jsonschema.validate(trust_store, schema)
+
+    return trust_store
+```
+
+=== Step 2.2: Fetch Attestation Bundle
+
+Query the OCI Referrers API:
+
+```python
+def fetch_bundle(client: Client, image_digest: str) -> dict:
+    # Query referrers
+    referrers = client.get_referrers(
+        image_digest,
+        artifact_type="application/vnd.verified-container.bundle+json"
+    )
+
+    if not referrers:
+        raise VerificationError("MISSING_ATTESTATION")
+
+    # Fetch bundle blob
+    manifest = referrers[0]
+    bundle_digest = manifest["layers"][0]["digest"]
+    bundle_bytes = client.fetch_blob(bundle_digest)
+
+    return json.loads(bundle_bytes)
+```
+
+=== Step 2.3: Verify Subject Match
+
+Ensure all attestations match the image:
+
+```python
+def verify_subjects(bundle: dict, image_digest: str) -> None:
+    for envelope in bundle["attestations"]:
+        statement = json.loads(
+            base64.b64decode(envelope["payload"])
+        )
+
+        for subject in statement["subject"]:
+            subject_digest = subject["digest"].get("sha256")
+            if f"sha256:{subject_digest}" != image_digest:
+                raise VerificationError("SUBJECT_MISMATCH")
+```
+
+=== Step 2.4: Verify Signatures
+
+Validate each signature against the trust store:
+
+```python
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+def verify_signatures(bundle: dict, trust_store: dict) -> None:
+    for envelope in bundle["attestations"]:
+        for sig in envelope["signatures"]:
+            key_id = sig["keyid"]
+
+            # Find key in trust store
+            pub_key = find_key(trust_store, key_id)
+            if not pub_key:
+                raise VerificationError("UNKNOWN_KEY")
+
+            # Check validity period
+            now = datetime.utcnow()
+            if now < pub_key["validFrom"]:
+                raise VerificationError("KEY_NOT_YET_VALID")
+            if pub_key.get("validUntil") and now > pub_key["validUntil"]:
+                raise VerificationError("EXPIRED_KEY")
+
+            # Verify signature
+            verify_dsse_signature(envelope, pub_key)
+```
+
+=== Step 2.5: Verify Log Proofs
+
+Validate Merkle inclusion proofs:
+
+```python
+def verify_log_proofs(bundle: dict, trust_store: dict) -> None:
+    log_ids = set()
+
+    for entry in bundle["logEntries"]:
+        log_id = entry["logId"]
+        log_ids.add(log_id)
+
+        # Get log public key
+        log_config = trust_store["logs"].get(log_id)
+        if not log_config:
+            raise VerificationError("LOG_PROOF_INVALID")
+
+        # Verify signed entry timestamp
+        verify_log_signature(
+            entry["signedEntryTimestamp"],
+            entry,
+            log_config["publicKey"]
+        )
+
+        # Verify Merkle inclusion proof
+        verify_merkle_proof(
+            entry["inclusionProof"],
+            compute_leaf_hash(entry)
+        )
+
+    # Require 2 distinct logs
+    if len(log_ids) < 2:
+        raise VerificationError("INSUFFICIENT_LOG_COVERAGE")
+```
+
+=== Step 2.6: Verify Threshold Signature
+
+Check k-of-n threshold requirement:
+
+```python
+def verify_threshold(bundle: dict, trust_store: dict) -> None:
+    for group_name, group in trust_store["thresholds"].items():
+        k = group["k"]
+        members = set(group["members"])
+
+        # Count valid signatures from group members
+        valid_count = 0
+        for envelope in bundle["attestations"]:
+            for sig in envelope["signatures"]:
+                if sig["keyid"] in members:
+                    valid_count += 1
+
+        if valid_count < k:
+            raise VerificationError("THRESHOLD_NOT_MET")
+```
+
+=== Step 2.7: Complete Verification
+
+Combine all steps:
+
+```python
+def verify_image(image_ref: str, trust_store: dict, mode: str = "strict") -> bool:
+    try:
+        # Resolve to digest
+        image_digest = resolve_digest(image_ref)
+
+        # Fetch bundle
+        bundle = fetch_bundle(client, image_digest)
+
+        # Run verification steps
+        verify_subjects(bundle, image_digest)
+        verify_signatures(bundle, trust_store)
+        verify_log_proofs(bundle, trust_store)
+        verify_threshold(bundle, trust_store)
+
+        log_result(image_digest, "ALLOW")
+        return True
+
+    except VerificationError as e:
+        if mode == "strict":
+            log_result(image_digest, "REJECT", e.code)
+            raise
+        elif mode == "permissive":
+            log_result(image_digest, "WARN", e.code)
+            return True
+        else:  # audit
+            log_result(image_digest, "AUDIT", e.code)
+            return True
+```
+
+== Part 3: Conformance Testing
+
+=== Running Conformance Tests
+
+```bash
+# Download conformance runner
+curl -LO https://verified-container.org/conformance/runner
+
+# Run producer tests
+./runner --profile producer --implementation ./my-producer
+
+# Run consumer tests
+./runner --profile consumer --implementation ./my-consumer
+```
+
+=== Conformance Levels
+
+[cols="1,3"]
+|===
+| Level | Requirements
+
+| Basic
+| Parse/generate wire formats, basic signature verification
+
+| Moderate
+| Full verification protocol, log proof validation
+
+| Full
+| Threshold signatures, offline mode, caching
+|===
+
+=== Required Test Cases
+
+See link:../conformance/profiles/[conformance profiles] for complete test case lists.
+
+== Common Pitfalls
+
+[cols="2,3"]
+|===
+| Pitfall | Solution
+
+| Wrong PAE encoding
+| Use exact DSSE specification for Pre-Authentication Encoding
+
+| Timestamp parsing
+| Use RFC 3339 / ISO 8601 with timezone
+
+| Base64 variants
+| Use standard Base64 with padding
+
+| Key ID format
+| Use `sha256:` prefix with lowercase hex
+
+| Log operator distinction
+| Verify `logId` values are truly distinct
+|===
+
+== Next Steps
+
+1. Review link:../spec/verification-protocol.adoc[Verification Protocol] for complete details
+2. Download link:../vectors/[test vectors] for validation
+3. Run link:../conformance/[conformance tests]
+4. Join the community for questions
+
+== Changelog
+
+=== 0.1.0 (2024-12-28)
+- Initial quickstart guide

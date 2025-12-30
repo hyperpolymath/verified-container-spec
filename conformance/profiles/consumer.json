@@ -1,0 +1,262 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "id": "consumer-conformance-profile",
+  "name": "Consumer Conformance Profile",
+  "version": "0.1.0",
+  "description": "Conformance requirements for systems that verify and execute containers",
+  "levels": {
+    "basic": {
+      "description": "Minimum requirements for a conforming consumer",
+      "required": true,
+      "tests": [
+        {
+          "id": "CONS-B-001",
+          "name": "Parse valid attestation bundle",
+          "command": "validate",
+          "input": {
+            "type": "attestation-bundle",
+            "file": "vectors/valid/attestation-bundle/minimal-valid-bundle.json#/input"
+          },
+          "expected": {
+            "exitCode": 0,
+            "valid": true
+          }
+        },
+        {
+          "id": "CONS-B-002",
+          "name": "Reject invalid attestation bundle",
+          "command": "validate",
+          "input": {
+            "type": "attestation-bundle",
+            "file": "vectors/invalid/attestation-bundle/wrong-media-type.json#/input"
+          },
+          "expected": {
+            "exitCode": 1,
+            "valid": false
+          }
+        },
+        {
+          "id": "CONS-B-003",
+          "name": "Parse valid trust store",
+          "command": "validate",
+          "input": {
+            "type": "trust-store",
+            "file": "vectors/valid/trust-store/minimal-valid-trust-store.json#/input"
+          },
+          "expected": {
+            "exitCode": 0,
+            "valid": true
+          }
+        },
+        {
+          "id": "CONS-B-004",
+          "name": "Verify Ed25519 signatures",
+          "command": "verify",
+          "expected": {
+            "signatureVerification": true
+          }
+        },
+        {
+          "id": "CONS-B-005",
+          "name": "Reject missing attestation (strict mode)",
+          "command": "verify",
+          "input": {
+            "mode": "strict",
+            "bundleExists": false
+          },
+          "expected": {
+            "exitCode": 1,
+            "errorCode": "MISSING_ATTESTATION"
+          }
+        }
+      ]
+    },
+    "moderate": {
+      "description": "Full verification protocol",
+      "required": false,
+      "tests": [
+        {
+          "id": "CONS-M-001",
+          "name": "Verify subject digest match",
+          "command": "verify",
+          "input": {
+            "bundle": "bundle with attestation",
+            "imageDigest": "sha256:expected-digest"
+          },
+          "expected": {
+            "subjectMatch": true
+          }
+        },
+        {
+          "id": "CONS-M-002",
+          "name": "Reject subject mismatch",
+          "command": "verify",
+          "input": {
+            "bundle": "bundle with attestation",
+            "imageDigest": "sha256:different-digest"
+          },
+          "expected": {
+            "exitCode": 1,
+            "errorCode": "SUBJECT_MISMATCH"
+          }
+        },
+        {
+          "id": "CONS-M-003",
+          "name": "Verify Merkle inclusion proofs",
+          "command": "verify-proof",
+          "input": "vectors/valid/attestation-bundle/minimal-valid-bundle.json#/input/logEntries/0/inclusionProof",
+          "expected": {
+            "proofValid": true
+          }
+        },
+        {
+          "id": "CONS-M-004",
+          "name": "Reject invalid Merkle proof",
+          "command": "verify-proof",
+          "input": "vectors/adversarial/proof/invalid-merkle-path.json#/input/inclusionProof",
+          "expected": {
+            "exitCode": 1,
+            "errorCode": "LOG_PROOF_INVALID"
+          }
+        },
+        {
+          "id": "CONS-M-005",
+          "name": "Require 2 distinct log operators",
+          "command": "verify",
+          "input": "vectors/invalid/attestation-bundle/missing-log-entries.json#/input",
+          "expected": {
+            "exitCode": 1,
+            "errorCode": "INSUFFICIENT_LOG_COVERAGE"
+          }
+        },
+        {
+          "id": "CONS-M-006",
+          "name": "Reject expired key",
+          "command": "verify",
+          "scenario": "Key validUntil is in the past",
+          "expected": {
+            "exitCode": 1,
+            "errorCode": "EXPIRED_KEY"
+          }
+        },
+        {
+          "id": "CONS-M-007",
+          "name": "Reject key not yet valid",
+          "command": "verify",
+          "scenario": "Key validFrom is in the future",
+          "expected": {
+            "exitCode": 1,
+            "errorCode": "KEY_NOT_YET_VALID"
+          }
+        },
+        {
+          "id": "CONS-M-008",
+          "name": "Reject unknown key",
+          "command": "verify",
+          "scenario": "Signing key not in trust store",
+          "expected": {
+            "exitCode": 1,
+            "errorCode": "UNKNOWN_KEY"
+          }
+        }
+      ]
+    },
+    "full": {
+      "description": "Full consumer conformance including advanced features",
+      "required": false,
+      "tests": [
+        {
+          "id": "CONS-F-001",
+          "name": "Verify threshold signature requirements",
+          "command": "verify",
+          "input": {
+            "thresholdGroup": "release-signers",
+            "requiredK": 2
+          },
+          "expected": {
+            "thresholdMet": true
+          }
+        },
+        {
+          "id": "CONS-F-002",
+          "name": "Reject threshold not met",
+          "command": "verify",
+          "scenario": "Only 1 of required 2 signatures present",
+          "expected": {
+            "exitCode": 1,
+            "errorCode": "THRESHOLD_NOT_MET"
+          }
+        },
+        {
+          "id": "CONS-F-003",
+          "name": "Support offline verification",
+          "command": "verify",
+          "input": {
+            "offline": true,
+            "cachedBundle": true
+          },
+          "expected": {
+            "offlineVerificationSucceeds": true
+          }
+        },
+        {
+          "id": "CONS-F-004",
+          "name": "Cache verification results",
+          "command": "verify",
+          "validation": {
+            "cacheHitOnRepeatedVerification": true
+          }
+        },
+        {
+          "id": "CONS-F-005",
+          "name": "Invalidate cache on trust store update",
+          "command": "verify",
+          "scenario": "Trust store version incremented",
+          "expected": {
+            "cacheInvalidated": true,
+            "reVerificationPerformed": true
+          }
+        },
+        {
+          "id": "CONS-F-006",
+          "name": "Support permissive mode",
+          "command": "verify",
+          "input": {
+            "mode": "permissive",
+            "bundleInvalid": true
+          },
+          "expected": {
+            "exitCode": 0,
+            "decision": "ALLOW",
+            "warningsLogged": true
+          }
+        },
+        {
+          "id": "CONS-F-007",
+          "name": "Support audit mode",
+          "command": "verify",
+          "input": {
+            "mode": "audit"
+          },
+          "expected": {
+            "exitCode": 0,
+            "auditLogWritten": true
+          }
+        },
+        {
+          "id": "CONS-F-008",
+          "name": "Fetch bundle via OCI Referrers API",
+          "type": "integration",
+          "expected": {
+            "bundleFetched": true
+          }
+        }
+      ]
+    }
+  },
+  "scoring": {
+    "basic": { "required": true, "points": 0 },
+    "moderate": { "required": false, "points": 50 },
+    "full": { "required": false, "points": 100 }
+  }
+}
