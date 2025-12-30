@@ -1,0 +1,16 @@
+{
+  "id": "invalid-bundle-002",
+  "description": "Bundle with incorrect mediaType",
+  "specSection": "attestation-bundle.adoc#4.1",
+  "category": "invalid",
+  "input": {
+    "mediaType": "application/json",
+    "version": "0.1.0",
+    "attestations": [],
+    "logEntries": []
+  },
+  "expected": {
+    "valid": false,
+    "errorCode": "MALFORMED_BUNDLE"
+  }
+}

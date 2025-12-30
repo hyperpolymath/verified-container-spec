@@ -1,0 +1,19 @@
+{
+  "id": "adversarial-canon-001",
+  "description": "Test that implementations correctly sort object keys lexicographically",
+  "specSection": "canonicalization.adoc#4.1",
+  "category": "adversarial",
+  "input": {
+    "z": "last",
+    "a": "first",
+    "m": "middle",
+    "A": "capital-first",
+    "aa": "double-a",
+    "ab": "a-then-b"
+  },
+  "expected": {
+    "valid": true,
+    "canonical": "{\"A\":\"capital-first\",\"a\":\"first\",\"aa\":\"double-a\",\"ab\":\"a-then-b\",\"m\":\"middle\",\"z\":\"last\"}",
+    "digest": "sha256:b8e4c9e68d79e3c8c8c1e6c3b1a2f5d4e3c2b1a0f9e8d7c6b5a4938271605040"
+  }
+}

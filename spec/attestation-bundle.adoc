@@ -3,17 +3,38 @@
 :status: draft
 :media-type: application/vnd.verified-container.bundle+json
 
-== 1. Overview
+== 1. Scope
+
+This document defines the wire format for attestation bundles in the Verified Container Specification. It covers:
+
+* The structure and required fields of an attestation bundle
+* Required and optional attestation types
+* Transparency log entry format
+* Distribution via OCI Referrers API
+
+This document does NOT cover:
+
+* Trust store management (see link:trust-store.adoc[Trust Store Format])
+* Verification procedures (see link:verification-protocol.adoc[Verification Protocol])
+* Transparency log operation (see link:transparency-log.adoc[Transparency Log Requirements])
+
+== 2. Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in https://datatracker.ietf.org/doc/html/rfc2119[RFC 2119].
+
+See link:../docs/glossary.adoc[Glossary] for definitions of terms used throughout this specification.
+
+== 3. Overview
 
 An attestation bundle packages multiple in-toto attestations with transparency log inclusion proofs into a single distributable unit.
 
-== 2. Media Type
+== 4. Media Type
 
 ```
 application/vnd.verified-container.bundle+json
 ```
 
-== 3. Structure
+== 5. Structure
 
 ```json
 {
@@ -24,17 +45,17 @@ application/vnd.verified-container.bundle+json
 }
 ```
 
-== 4. Fields
+== 6. Fields
 
-=== 4.1 mediaType (REQUIRED)
+=== 6.1 mediaType (REQUIRED)
 
 MUST be `"application/vnd.verified-container.bundle+json"`.
 
-=== 4.2 version (REQUIRED)
+=== 6.2 version (REQUIRED)
 
 Semantic version of this specification. Currently `"0.1.0"`.
 
-=== 4.3 attestations (REQUIRED)
+=== 6.3 attestations (REQUIRED)
 
 Array of in-toto Statement objects. Each statement follows the https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md[in-toto Statement v1] specification.
 
@@ -54,7 +75,7 @@ Array of in-toto Statement objects. Each statement follows the https://github.co
 }
 ```
 
-==== 4.3.1 Required Attestation Types
+==== 6.3.1 Required Attestation Types
 
 A compliant bundle MUST include:
 
@@ -71,7 +92,7 @@ A compliant bundle MUST include:
 | https://spdx.github.io/spdx-spec/v2.3/[SPDX 2.3]
 |===
 
-==== 4.3.2 Optional Attestation Types
+==== 6.3.2 Optional Attestation Types
 
 [cols="2,3"]
 |===
@@ -87,7 +108,7 @@ A compliant bundle MUST include:
 | Threshold signature attestation
 |===
 
-=== 4.4 logEntries (REQUIRED)
+=== 6.4 logEntries (REQUIRED)
 
 Array of transparency log inclusion proofs. At least 2 entries from different log operators MUST be present.
 
@@ -106,7 +127,7 @@ Array of transparency log inclusion proofs. At least 2 entries from different lo
 }
 ```
 
-==== 4.4.1 Log Entry Fields
+==== 6.4.1 Log Entry Fields
 
 [cols="1,3"]
 |===
@@ -128,7 +149,7 @@ Array of transparency log inclusion proofs. At least 2 entries from different lo
 | Log operator's signature over the entry
 |===
 
-== 5. Signature Envelope
+== 7. Signature Envelope
 
 Each attestation in the bundle MUST be wrapped in a https://github.com/secure-systems-lab/dsse[DSSE] (Dead Simple Signing Envelope):
 
@@ -145,7 +166,7 @@ Each attestation in the bundle MUST be wrapped in a https://github.com/secure-sy
 }
 ```
 
-== 6. Distribution
+== 8. Distribution
 
 Attestation bundles are attached to OCI images using the https://github.com/opencontainers/image-spec/blob/main/manifest.md#referrers-api[OCI Referrers API]:
 
@@ -174,7 +195,7 @@ Attestation bundles are attached to OCI images using the https://github.com/open
 }
 ```
 
-== 7. Verification Requirements
+== 9. Verification Requirements
 
 A consumer MUST:
 
@@ -188,7 +209,7 @@ A consumer MAY:
 * Cache verification results for a bounded time
 * Require additional attestation types beyond the minimum
 
-== 8. Example
+== 10. Example
 
 ```json
 {
@@ -235,21 +256,21 @@ A consumer MAY:
 }
 ```
 
-== 9. Security Considerations
+== 11. Security Considerations
 
-=== 9.1 Replay Protection
+=== 11.1 Replay Protection
 
 Log indices are monotonic. Consumers SHOULD track the highest seen index and reject entries with lower indices (rollback attack).
 
-=== 9.2 Time Attacks
+=== 11.2 Time Attacks
 
 `integratedTime` is attested by the log operator. Consumers SHOULD verify timestamps are within acceptable bounds but MUST NOT rely solely on timestamps for freshness.
 
-=== 9.3 Key Compromise
+=== 11.3 Key Compromise
 
 Threshold signatures (k-of-n) ensure no single key compromise is catastrophic. Trust store key rotation procedures are defined in link:trust-store.adoc[Trust Store].
 
-== 10. Changelog
+== 12. Changelog
 
 === 0.1.0 (2024-12-28)
 - Initial specification

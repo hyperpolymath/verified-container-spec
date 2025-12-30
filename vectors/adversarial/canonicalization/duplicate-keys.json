@@ -1,0 +1,13 @@
+{
+  "id": "adversarial-canon-002",
+  "description": "Test behavior with duplicate keys (JSON technically allows, implementations vary)",
+  "specSection": "canonicalization.adoc#4.1",
+  "category": "adversarial",
+  "notes": "RFC 8259 says keys SHOULD be unique. Implementations MUST use the last occurrence per ECMA-262.",
+  "inputRaw": "{\"key\":\"first\",\"key\":\"second\"}",
+  "expected": {
+    "valid": true,
+    "canonical": "{\"key\":\"second\"}",
+    "notes": "Last value wins per JavaScript semantics"
+  }
+}

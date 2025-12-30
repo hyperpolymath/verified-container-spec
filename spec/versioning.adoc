@@ -1,0 +1,334 @@
+= Versioning and Compatibility
+:spec-version: 0.1.0
+:status: draft
+
+== 1. Scope
+
+This document defines versioning rules, compatibility guarantees, and migration procedures for the Verified Container Specification.
+
+== 2. Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in https://datatracker.ietf.org/doc/html/rfc2119[RFC 2119].
+
+Major Version:: The first number in a version string (e.g., *1*.2.3). Incremented for breaking changes.
+Minor Version:: The second number in a version string (e.g., 1.*2*.3). Incremented for backwards-compatible additions.
+Patch Version:: The third number in a version string (e.g., 1.2.*3*). Incremented for backwards-compatible fixes.
+Breaking Change:: A modification that requires consumers to update their implementations.
+Backwards Compatible:: A modification that does not require consumers to update.
+
+== 3. Version String Format
+
+All specification versions follow https://semver.org/[Semantic Versioning 2.0.0]:
+
+```
+MAJOR.MINOR.PATCH
+```
+
+Examples:
+* `0.1.0` - Initial draft
+* `1.0.0` - First stable release
+* `1.1.0` - Backwards-compatible feature addition
+* `2.0.0` - Breaking change
+
+== 4. Compatibility Rules
+
+=== 4.1 Pre-1.0 (Draft Phase)
+
+During the draft phase (`0.x.y`):
+
+* ANY change may be breaking
+* Implementers SHOULD expect instability
+* MINOR version increments indicate significant changes
+* PATCH version increments indicate minor fixes
+
+=== 4.2 Post-1.0 (Stable Phase)
+
+After reaching `1.0.0`:
+
+[cols="1,2,3"]
+|===
+| Version Bump | Type of Change | Examples
+
+| MAJOR
+| Breaking changes
+| Removing required fields, changing cryptographic algorithms, altering verification logic
+
+| MINOR
+| Backwards-compatible additions
+| New optional attestation types, additional metadata fields, new optional API endpoints
+
+| PATCH
+| Backwards-compatible fixes
+| Clarifications, typo fixes, documentation improvements
+|===
+
+=== 4.3 Compatibility Guarantees
+
+A MINOR version bump guarantees:
+
+* Existing valid documents remain valid
+* Existing verification logic continues to work
+* New features are optional or have sensible defaults
+
+A MAJOR version bump means:
+
+* Existing documents MAY become invalid
+* Verification logic MAY require updates
+* Migration guidance MUST be provided
+
+== 5. Wire Format Versioning
+
+=== 5.1 Version Field Requirements
+
+All wire formats MUST include a version field:
+
+```json
+{
+  "version": "0.1.0"
+}
+```
+
+OR for integer-versioned formats:
+
+```json
+{
+  "version": 1
+}
+```
+
+=== 5.2 Version Negotiation
+
+Consumers MUST:
+
+1. Parse the version field before processing
+2. Reject documents with unsupported major versions
+3. Process documents with supported major versions (accepting unknown optional fields)
+4. Log warnings for unknown minor version features
+
+Producers MUST:
+
+1. Always include the version field
+2. Use the highest version they fully support
+3. Not use features from versions they cannot verify
+
+=== 5.3 Format-Specific Versioning
+
+[cols="2,2,2"]
+|===
+| Format | Version Type | Current Version
+
+| Attestation Bundle
+| Semantic version string
+| `0.1.0`
+
+| Trust Store
+| Integer
+| `1`
+
+| Transparency Log Entry
+| Integer
+| `1`
+
+| Transparency Log API
+| URI path segment
+| `/api/v1/`
+|===
+
+== 6. Deprecation Policy
+
+=== 6.1 Deprecation Process
+
+When deprecating a feature:
+
+1. *Announce*: Add deprecation notice in release notes
+2. *Mark*: Add `deprecated: true` to schema/docs
+3. *Maintain*: Support for at least 2 minor versions
+4. *Remove*: Remove in next major version
+
+=== 6.2 Deprecation Timeline
+
+```
+v1.5.0 - Feature X marked deprecated
+v1.6.0 - Deprecation warnings logged
+v1.7.0 - Last version supporting Feature X
+v2.0.0 - Feature X removed
+```
+
+=== 6.3 Deprecation Notices
+
+Deprecated features MUST be documented with:
+
+* Reason for deprecation
+* Recommended replacement
+* Removal timeline
+* Migration instructions
+
+== 7. Feature Flags
+
+=== 7.1 Experimental Features
+
+Experimental features:
+
+* Are prefixed with `experimental_` in field names
+* MUST NOT be required for verification
+* MAY be removed without notice
+* Are documented in `docs/experimental.adoc`
+
+=== 7.2 Optional Extensions
+
+Optional extensions:
+
+* Use a registered extension namespace
+* MUST NOT break core verification
+* Are documented separately from core spec
+* Follow independent versioning
+
+== 8. Schema Evolution
+
+=== 8.1 Additive Changes (Non-Breaking)
+
+The following changes are backwards-compatible:
+
+* Adding new optional fields
+* Adding new enum values (if consumers ignore unknown values)
+* Adding new optional attestation types
+* Relaxing validation constraints
+
+=== 8.2 Breaking Changes
+
+The following changes require a major version bump:
+
+* Removing or renaming required fields
+* Changing field types
+* Tightening validation constraints
+* Changing cryptographic algorithms
+* Changing verification logic
+
+=== 8.3 Schema Versioning
+
+JSON Schemas are versioned alongside the specification:
+
+* Schema `$id` includes version: `https://verified-container.org/schema/trust-store-v1.json`
+* Major version changes create new schema files
+* Minor version changes update existing schema files
+
+== 9. Migration Guides
+
+=== 9.1 Migration Document Requirements
+
+Each major version MUST include a migration guide containing:
+
+* Summary of breaking changes
+* Step-by-step migration instructions
+* Code examples for common migrations
+* Tooling for automated migration (if feasible)
+
+=== 9.2 Migration Guide Location
+
+Migration guides are located at:
+
+```
+docs/migrations/v{OLD}-to-v{NEW}.adoc
+```
+
+Example: `docs/migrations/v1-to-v2.adoc`
+
+== 10. Release Process
+
+=== 10.1 Release Artifacts
+
+Each release includes:
+
+* Tagged git commit (e.g., `v1.2.0`)
+* Changelog entry
+* Updated schemas (in `schema/`)
+* Updated test vectors (in `vectors/`)
+* GitHub release with attached artifacts
+
+=== 10.2 Release Cadence
+
+* PATCH releases: As needed for critical fixes
+* MINOR releases: Quarterly or as features are ready
+* MAJOR releases: Annually or when breaking changes accumulate
+
+=== 10.3 Release Checklist
+
+1. [ ] All tests pass
+2. [ ] All schemas validate
+3. [ ] Changelog updated
+4. [ ] Version numbers updated in all files
+5. [ ] Migration guide complete (if major)
+6. [ ] Documentation reviewed
+7. [ ] Security review complete (if applicable)
+
+== 11. Security Considerations
+
+=== 11.1 Version Downgrade Attacks
+
+Implementations MUST prevent version downgrade attacks:
+
+* Reject documents claiming older versions than previously seen
+* Maintain minimum version requirements
+* Log version anomalies
+
+=== 11.2 Feature Flag Abuse
+
+Experimental features:
+
+* MUST NOT weaken security guarantees
+* MUST be clearly documented as experimental
+* SHOULD require explicit opt-in
+
+== 12. Examples
+
+=== 12.1 Minor Version Addition
+
+Adding an optional `metadata` field to attestation bundles:
+
+```json
+// v0.1.0 - Original
+{
+  "mediaType": "application/vnd.verified-container.bundle+json",
+  "version": "0.1.0",
+  "attestations": [...],
+  "logEntries": [...]
+}
+
+// v0.2.0 - With optional metadata
+{
+  "mediaType": "application/vnd.verified-container.bundle+json",
+  "version": "0.2.0",
+  "attestations": [...],
+  "logEntries": [...],
+  "metadata": {
+    "producer": "cerro-torre",
+    "producerVersion": "1.0.0"
+  }
+}
+```
+
+=== 12.2 Major Version Change
+
+Changing from Ed25519 to Ed448 signatures (hypothetical):
+
+```adoc
+== Migration from v1 to v2
+
+=== Breaking Changes
+
+1. Default signature algorithm changed from Ed25519 to Ed448
+2. Trust stores must include Ed448 keys
+
+=== Migration Steps
+
+1. Update trust store with Ed448 keys
+2. Re-sign attestations with Ed448
+3. Update verification code to support Ed448
+4. Deploy updated consumers
+5. Remove Ed25519 keys after transition period
+```
+
+== 13. Changelog
+
+=== 0.1.0 (2024-12-28)
+- Initial specification

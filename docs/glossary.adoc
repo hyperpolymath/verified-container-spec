@@ -1,0 +1,196 @@
+= Glossary
+:spec-version: 0.1.0
+:status: draft
+
+== Overview
+
+This glossary defines terms used throughout the Verified Container Specification. Terms are used consistently across all specification documents.
+
+== Terms
+
+[[attestation]]
+Attestation::
+A signed statement about a software artifact, following the https://github.com/in-toto/attestation[in-toto Attestation Framework]. Attestations are cryptographically bound to their subjects.
+
+[[attestation-bundle]]
+Attestation Bundle::
+A packaged collection of attestations with transparency log inclusion proofs. Defined in link:../spec/attestation-bundle.adoc[Attestation Bundle Format].
+
+[[builder]]
+Builder::
+A system that constructs container images from source materials. Builders sign build provenance attestations.
+
+[[consumer]]
+Consumer::
+A system that verifies and executes container images. Consumers validate attestation bundles before allowing execution. Examples: Svalinn, Vordr.
+
+[[dsse]]
+DSSE (Dead Simple Signing Envelope)::
+A signature envelope format defined by https://github.com/secure-systems-lab/dsse[secure-systems-lab]. Used to wrap attestations with cryptographic signatures.
+
+[[ed25519]]
+Ed25519::
+An elliptic curve digital signature algorithm defined in https://datatracker.ietf.org/doc/html/rfc8032[RFC 8032]. The mandatory signature algorithm for this specification.
+
+[[frost]]
+FROST (Flexible Round-Optimized Schnorr Threshold)::
+A threshold signature scheme. FROST-Ed25519 is used for k-of-n signing in threshold groups.
+
+[[inclusion-proof]]
+Inclusion Proof::
+A Merkle tree proof demonstrating that an entry exists in a transparency log at a specific index.
+
+[[in-toto]]
+in-toto::
+A framework for securing software supply chains through attestations. See https://in-toto.io/[in-toto.io].
+
+[[log-operator]]
+Log Operator::
+An organization that operates a transparency log instance. At least 3 independent operators are required for federation.
+
+[[merkle-tree]]
+Merkle Tree::
+A hash tree structure where each leaf is a hash of data, and each non-leaf is a hash of its children. Used in transparency logs for efficient proofs.
+
+[[oci]]
+OCI (Open Container Initiative)::
+A governance structure for container format and runtime specifications. See https://opencontainers.org/[opencontainers.org].
+
+[[oci-referrers-api]]
+OCI Referrers API::
+An OCI specification for discovering artifacts related to container images. Used to distribute attestation bundles.
+
+[[predicate]]
+Predicate::
+The typed content of an attestation, describing specific properties (provenance, SBOM, etc.).
+
+[[producer]]
+Producer::
+A system that creates verified container artifacts, including images and attestation bundles. Examples: Cerro Torre.
+
+[[provenance]]
+Provenance::
+A record of how a software artifact was created, including source materials, build process, and environment. See https://slsa.dev/provenance[SLSA Provenance].
+
+[[quorum]]
+Quorum::
+The minimum number of participants required for an action. This specification requires 2-of-3 log operator quorum.
+
+[[revocation]]
+Revocation::
+The act of invalidating a key or attestation, recorded in the transparency log.
+
+[[sbom]]
+SBOM (Software Bill of Materials)::
+An inventory of software components in an artifact. This specification uses https://spdx.dev/[SPDX 2.3] format.
+
+[[signed-tree-head]]
+Signed Tree Head (STH)::
+A cryptographically signed snapshot of a transparency log's current state, including tree size and root hash.
+
+[[slsa]]
+SLSA (Supply-chain Levels for Software Artifacts)::
+A security framework for software supply chains. See https://slsa.dev/[slsa.dev]. This specification requires SLSA Provenance v1.
+
+[[subject]]
+Subject::
+The software artifact that an attestation describes. Identified by content-addressable digest.
+
+[[threshold-signature]]
+Threshold Signature::
+A signature scheme requiring k-of-n participants to create a valid signature. Used for release signing.
+
+[[transparency-log]]
+Transparency Log::
+An append-only, cryptographically verifiable log of attestations. Multiple independent logs provide federation.
+
+[[trust-store]]
+Trust Store::
+A collection of public keys and policies used to verify attestation bundles. Defined in link:../spec/trust-store.adoc[Trust Store Format].
+
+[[verification]]
+Verification::
+The process of validating an attestation bundle against a trust store, including signature verification, log proof validation, and threshold checking.
+
+[[verification-mode]]
+Verification Mode::
+The strictness level for verification: Strict (fail on any error), Permissive (warn only), or Audit (log only).
+
+== Abbreviations
+
+[cols="1,3"]
+|===
+| Abbreviation | Expansion
+
+| API
+| Application Programming Interface
+
+| DSSE
+| Dead Simple Signing Envelope
+
+| FROST
+| Flexible Round-Optimized Schnorr Threshold
+
+| HSM
+| Hardware Security Module
+
+| JSON
+| JavaScript Object Notation
+
+| OCI
+| Open Container Initiative
+
+| RFC
+| Request for Comments
+
+| SBOM
+| Software Bill of Materials
+
+| SHA
+| Secure Hash Algorithm
+
+| SLSA
+| Supply-chain Levels for Software Artifacts
+
+| SPDX
+| Software Package Data Exchange
+
+| STH
+| Signed Tree Head
+
+| URI
+| Uniform Resource Identifier
+|===
+
+== Related Specifications
+
+[cols="2,3"]
+|===
+| Specification | URL
+
+| in-toto Attestation Framework
+| https://github.com/in-toto/attestation
+
+| DSSE
+| https://github.com/secure-systems-lab/dsse
+
+| SLSA
+| https://slsa.dev/
+
+| SPDX
+| https://spdx.dev/
+
+| OCI Image Spec
+| https://github.com/opencontainers/image-spec
+
+| RFC 8032 (Ed25519)
+| https://datatracker.ietf.org/doc/html/rfc8032
+
+| RFC 2119 (Key Words)
+| https://datatracker.ietf.org/doc/html/rfc2119
+|===
+
+== Changelog
+
+=== 0.1.0 (2024-12-28)
+- Initial glossary

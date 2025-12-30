@@ -1,0 +1,48 @@
+= Examples
+:spec-version: 0.1.0
+
+== Overview
+
+This directory contains executable examples demonstrating the major flows of the Verified Container Specification.
+
+== Directory Structure
+
+```
+examples/
+├── happy-path/              # Successful verification flows
+│   ├── producer-flow.json   # Complete producer workflow
+│   └── consumer-flow.json   # Complete consumer verification
+├── policy-reject/           # Policy rejection scenarios
+│   ├── expired-key.json     # Key validity expired
+│   ├── threshold-fail.json  # Threshold not met
+│   └── unknown-key.json     # Key not in trust store
+└── offline/                 # Offline verification examples
+    └── cached-bundle.json   # Pre-cached bundle verification
+```
+
+== Running Examples
+
+Examples are validated by CI:
+
+```bash
+just examples-validate
+```
+
+== Example Format
+
+Each example contains:
+
+```json
+{
+  "id": "example-id",
+  "description": "What this example demonstrates",
+  "flow": "producer|consumer",
+  "steps": [
+    {
+      "action": "description of step",
+      "input": { /* input data */ },
+      "output": { /* expected output */ }
+    }
+  ]
+}
+```

@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verified-container.org/schema/transparency-log-v1.json",
+  "title": "Verified Container Transparency Log",
+  "description": "Schemas for transparency log entries, proofs, and signed tree heads",
+  "oneOf": [
+    { "$ref": "#/$defs/logEntry" },
+    { "$ref": "#/$defs/signedTreeHead" },
+    { "$ref": "#/$defs/inclusionProofResponse" },
+    { "$ref": "#/$defs/submitRequest" },
+    { "$ref": "#/$defs/submitResponse" }
+  ],
+  "$defs": {
+    "logEntry": {
+      "type": "object",
+      "title": "Log Entry",
+      "description": "An entry in the transparency log",
+      "required": ["version", "timestamp", "entryType", "body"],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Entry format version"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of entry creation"
+        },
+        "entryType": {
+          "type": "string",
+          "enum": ["attestation", "revocation"],
+          "description": "Type of log entry"
+        },
+        "body": {
+          "oneOf": [
+            { "$ref": "#/$defs/attestationBody" },
+            { "$ref": "#/$defs/revocationBody" }
+          ],
+          "description": "Entry-type-specific body"
+        }
+      }
+    },
+    "attestationBody": {
+      "type": "object",
+      "title": "Attestation Entry Body",
+      "required": ["attestationDigest", "subjectDigest", "predicateType"],
+      "properties": {
+        "attestationDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "SHA-256 digest of the attestation"
+        },
+        "subjectDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "SHA-256 digest of the attested subject (image)"
+        },
+        "predicateType": {
+          "type": "string",
+          "format": "uri",
+          "description": "URI identifying the attestation predicate type"
+        }
+      }
+    },
+    "revocationBody": {
+      "type": "object",
+      "title": "Revocation Entry Body",
+      "required": ["revokedDigest", "reason", "revokedBy"],
+      "properties": {
+        "revokedDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Digest of the revoked attestation or key"
+        },
+        "reason": {
+          "type": "string",
+          "enum": ["key_compromise", "superseded", "affiliation_changed", "cessation", "privilege_withdrawn", "unspecified"],
+          "description": "Reason code for revocation"
+        },
+        "revokedBy": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$|^[a-zA-Z0-9_-]+$",
+          "description": "Key ID that authorized the revocation"
+        },
+        "revokedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Time when revocation takes effect"
+        }
+      }
+    },
+    "signedTreeHead": {
+      "type": "object",
+      "title": "Signed Tree Head",
+      "description": "Cryptographically signed snapshot of the log state",
+      "required": ["treeSize", "timestamp", "rootHash", "signature"],
+      "properties": {
+        "treeSize": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of entries in the tree"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Time when the tree head was signed"
+        },
+        "rootHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$|^sha256:[a-f0-9]{64}$",
+          "description": "SHA-256 root hash of the Merkle tree"
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/=]+$",
+          "description": "Base64-encoded Ed25519 signature"
+        }
+      }
+    },
+    "inclusionProofResponse": {
+      "type": "object",
+      "title": "Inclusion Proof Response",
+      "description": "Response from GET /api/v1/proof endpoint",
+      "required": ["logIndex", "treeSize", "rootHash", "hashes"],
+      "properties": {
+        "logIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index of the entry"
+        },
+        "treeSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Size of tree when proof was generated"
+        },
+        "rootHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$|^sha256:[a-f0-9]{64}$",
+          "description": "Root hash of the Merkle tree"
+        },
+        "hashes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$|^sha256:[a-f0-9]{64}$"
+          },
+          "description": "Proof path hashes"
+        }
+      }
+    },
+    "submitRequest": {
+      "type": "object",
+      "title": "Submit Entry Request",
+      "description": "Request body for POST /api/v1/entries endpoint",
+      "required": ["attestation"],
+      "properties": {
+        "attestation": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/=]+$",
+          "description": "Base64-encoded DSSE envelope"
+        }
+      }
+    },
+    "submitResponse": {
+      "type": "object",
+      "title": "Submit Entry Response",
+      "description": "Response from POST /api/v1/entries endpoint",
+      "required": ["logIndex", "integratedTime", "inclusionProof", "signedEntryTimestamp"],
+      "properties": {
+        "logIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index assigned to the entry"
+        },
+        "integratedTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Time when entry was integrated"
+        },
+        "inclusionProof": {
+          "type": "object",
+          "required": ["logIndex", "rootHash", "treeSize", "hashes"],
+          "properties": {
+            "logIndex": { "type": "integer", "minimum": 0 },
+            "rootHash": { "type": "string" },
+            "treeSize": { "type": "integer", "minimum": 1 },
+            "hashes": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "signedEntryTimestamp": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/=]+$",
+          "description": "Base64-encoded signature over the entry"
+        }
+      }
+    }
+  }
+}

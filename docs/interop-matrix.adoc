@@ -1,0 +1,106 @@
+= Interoperability Matrix
+:spec-version: 0.1.0
+:status: draft
+:last-updated: 2024-12-28
+
+== Overview
+
+This document tracks interoperability between implementations of the Verified Container Specification. The matrix is automatically updated by CI when implementations run conformance tests.
+
+== Implementation Status
+
+[cols="2,1,1,1,1,1"]
+|===
+| Implementation | Type | Language | Basic | Moderate | Full
+
+| Cerro Torre
+| Producer
+| Rust
+| -
+| -
+| -
+
+| Svalinn
+| Consumer
+| Rust
+| -
+| -
+| -
+
+| Vordr
+| Consumer
+| Rust
+| -
+| -
+| -
+
+|===
+
+Legend:
+
+* ✓ = Conformant
+* ○ = Partial
+* ✗ = Non-conformant
+* - = Not tested
+
+== Cross-Implementation Testing
+
+=== Producer → Consumer Compatibility
+
+Bundles created by producers should be verifiable by consumers.
+
+[cols="2,1,1,1"]
+|===
+| Producer ↓ / Consumer → | Svalinn | Vordr | Reference
+
+| Cerro Torre
+| -
+| -
+| -
+
+| Reference
+| -
+| -
+| ✓
+
+|===
+
+== Test Results
+
+=== Latest CI Run
+
+```
+Run ID: -
+Date: -
+Commit: -
+
+Results pending first implementation conformance run.
+```
+
+=== Historical Results
+
+No historical results yet.
+
+== Adding Your Implementation
+
+To add your implementation to the interop matrix:
+
+1. Implement the CLI contract defined in `conformance/runner/cli-contract.json`
+2. Run conformance tests: `just conformance-run --profile <producer|consumer> --impl ./your-impl`
+3. Submit results via PR to this repository
+
+== Conformance Badges
+
+Implementations can display conformance badges:
+
+```markdown
+![Basic Conformance](https://verified-container.org/badges/basic.svg)
+![Moderate Conformance](https://verified-container.org/badges/moderate.svg)
+![Full Conformance](https://verified-container.org/badges/full.svg)
+```
+
+== Changelog
+
+=== 0.1.0 (2024-12-28)
+- Initial matrix structure
+- Placeholder for implementation results

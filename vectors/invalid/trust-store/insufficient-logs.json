@@ -1,0 +1,49 @@
+{
+  "id": "invalid-trust-store-001",
+  "description": "Trust store with only 2 log operators (requires minimum 3)",
+  "specSection": "trust-store.adoc#6",
+  "category": "invalid",
+  "input": {
+    "version": 1,
+    "id": "test-trust-store",
+    "updated": "2024-12-28T00:00:00Z",
+    "keys": {
+      "builders": [
+        {
+          "id": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "algorithm": "ed25519",
+          "publicKey": "MCowBQYDK2VwAyEAGb9F2CMCwMPPBmrZJJNtFe0BzLXmVr3QBT7Q4joZt0Y=",
+          "validFrom": "2024-01-01T00:00:00Z"
+        }
+      ]
+    },
+    "thresholds": {
+      "release-signers": {
+        "k": 1,
+        "n": 1,
+        "algorithm": "frost-ed25519",
+        "members": [
+          "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        ]
+      }
+    },
+    "logs": {
+      "log-1": {
+        "operator": "Operator 1",
+        "publicKey": "MCowBQYDK2VwAyEAGb9F2CMCwMPPBmrZJJNtFe0BzLXmVr3QBT7Q4joZt0Y=",
+        "url": "https://log1.example.com",
+        "algorithm": "ed25519"
+      },
+      "log-2": {
+        "operator": "Operator 2",
+        "publicKey": "MCowBQYDK2VwAyEAGb9F2CMCwMPPBmrZJJNtFe0BzLXmVr3QBT7Q4joZt0Y=",
+        "url": "https://log2.example.com",
+        "algorithm": "ed25519"
+      }
+    }
+  },
+  "expected": {
+    "valid": false,
+    "errorCode": "INSUFFICIENT_LOG_OPERATORS"
+  }
+}

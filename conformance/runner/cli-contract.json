@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://verified-container.org/conformance/cli-contract-v1.json",
+  "title": "Conformance Runner CLI Contract",
+  "description": "Language-agnostic CLI contract for conformance testing",
+  "version": "0.1.0",
+  "commands": {
+    "validate": {
+      "description": "Validate a document against its schema",
+      "synopsis": "<impl> validate --type <type> --input <file>",
+      "arguments": {
+        "--type": {
+          "required": true,
+          "values": ["attestation-bundle", "trust-store", "log-entry", "signed-tree-head"],
+          "description": "Document type to validate"
+        },
+        "--input": {
+          "required": true,
+          "description": "Path to JSON file to validate"
+        }
+      },
+      "exitCodes": {
+        "0": "Document is valid",
+        "1": "Document is invalid",
+        "2": "Error reading file or parsing JSON"
+      },
+      "stdout": {
+        "success": {
+          "valid": true
+        },
+        "failure": {
+          "valid": false,
+          "errors": [
+            {
+              "path": "$.field.name",
+              "message": "Error description"
+            }
+          ]
+        }
+      }
+    },
+    "verify": {
+      "description": "Verify an attestation bundle against a trust store",
+      "synopsis": "<impl> verify --bundle <file> --trust-store <file> [--image-digest <digest>] [--mode <mode>]",
+      "arguments": {
+        "--bundle": {
+          "required": true,
+          "description": "Path to attestation bundle JSON file"
+        },
+        "--trust-store": {
+          "required": true,
+          "description": "Path to trust store JSON file"
+        },
+        "--image-digest": {
+          "required": false,
+          "description": "Expected image digest (sha256:...)"
+        },
+        "--mode": {
+          "required": false,
+          "default": "strict",
+          "values": ["strict", "permissive", "audit"],
+          "description": "Verification mode"
+        }
+      },
+      "exitCodes": {
+        "0": "Verification passed (ALLOW)",
+        "1": "Verification failed (REJECT)",
+        "2": "Error during verification"
+      },
+      "stdout": {
+        "success": {
+          "decision": "ALLOW",
+          "attestationsVerified": 2,
+          "logEntriesVerified": 2,
+          "thresholdsMet": ["release-signers"]
+        },
+        "failure": {
+          "decision": "REJECT",
+          "errorCode": "INVALID_SIGNATURE",
+          "message": "Signature verification failed for key sha256:..."
+        }
+      }
+    },
+    "create-bundle": {
+      "description": "Create an attestation bundle (producer)",
+      "synopsis": "<impl> create-bundle --attestations <file> --log-entries <file> --output <file>",
+      "arguments": {
+        "--attestations": {
+          "required": true,
+          "description": "Path to JSON array of DSSE envelopes"
+        },
+        "--log-entries": {
+          "required": true,
+          "description": "Path to JSON array of log entries"
+        },
+        "--output": {
+          "required": true,
+          "description": "Path to write the bundle"
+        }
+      },
+      "exitCodes": {
+        "0": "Bundle created successfully",
+        "1": "Invalid input data",
+        "2": "Error writing output"
+      },
+      "stdout": {
+        "success": {
+          "created": true,
+          "bundleDigest": "sha256:...",
+          "path": "/path/to/output.json"
+        }
+      }
+    },
+    "sign": {
+      "description": "Sign an in-toto statement (producer)",
+      "synopsis": "<impl> sign --statement <file> --key <file> --output <file>",
+      "arguments": {
+        "--statement": {
+          "required": true,
+          "description": "Path to in-toto statement JSON"
+        },
+        "--key": {
+          "required": true,
+          "description": "Path to Ed25519 private key (PEM)"
+        },
+        "--output": {
+          "required": true,
+          "description": "Path to write the DSSE envelope"
+        }
+      },
+      "exitCodes": {
+        "0": "Signing successful",
+        "1": "Invalid input",
+        "2": "Signing error"
+      }
+    },
+    "canonicalize": {
+      "description": "Canonicalize a JSON document",
+      "synopsis": "<impl> canonicalize --input <file> [--output <file>]",
+      "arguments": {
+        "--input": {
+          "required": true,
+          "description": "Path to JSON file"
+        },
+        "--output": {
+          "required": false,
+          "description": "Path to write canonical output (default: stdout)"
+        }
+      },
+      "exitCodes": {
+        "0": "Success",
+        "1": "Invalid JSON",
+        "2": "Error"
+      },
+      "stdout": "Canonical JSON bytes (if --output not specified)"
+    },
+    "verify-proof": {
+      "description": "Verify a Merkle inclusion proof",
+      "synopsis": "<impl> verify-proof --proof <file> --leaf-hash <hash>",
+      "arguments": {
+        "--proof": {
+          "required": true,
+          "description": "Path to inclusion proof JSON"
+        },
+        "--leaf-hash": {
+          "required": true,
+          "description": "Expected leaf hash (hex)"
+        }
+      },
+      "exitCodes": {
+        "0": "Proof valid",
+        "1": "Proof invalid",
+        "2": "Error"
+      }
+    }
+  },
+  "commonFlags": {
+    "--verbose": {
+      "description": "Enable verbose output"
+    },
+    "--json": {
+      "description": "Output in JSON format (default)"
+    },
+    "--version": {
+      "description": "Print implementation version"
+    },
+    "--help": {
+      "description": "Print help message"
+    }
+  }
+}

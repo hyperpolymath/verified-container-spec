@@ -2,32 +2,52 @@
 :spec-version: 0.1.0
 :status: draft
 
-== 1. Overview
+== 1. Scope
 
-This document defines the procedure for verifying a container image before execution. A compliant consumer MUST implement this protocol.
+This document defines the verification protocol for container images in the Verified Container Specification. It covers:
+
+* Verification modes and their behavior
+* Step-by-step verification procedure
+* Error codes and recovery procedures
+* Caching and offline verification
+* Implementation requirements
+
+This document does NOT cover:
+
+* Attestation bundle format (see link:attestation-bundle.adoc[Attestation Bundle Format])
+* Trust store format (see link:trust-store.adoc[Trust Store Format])
+* Transparency log operation (see link:transparency-log.adoc[Transparency Log Requirements])
 
 == 2. Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in https://datatracker.ietf.org/doc/html/rfc2119[RFC 2119].
 
 Producer:: System that creates OCI images and attestation bundles (e.g., Cerro Torre)
 Consumer:: System that verifies and executes OCI images (e.g., Svalinn/Vordr)
 Trust Store:: Collection of public keys and policies (link:trust-store.adoc[spec])
 Attestation Bundle:: Packaged attestations with log proofs (link:attestation-bundle.adoc[spec])
 
-== 3. Verification Modes
+See link:../docs/glossary.adoc[Glossary] for additional term definitions.
 
-=== 3.1 Strict Mode
+== 3. Overview
+
+This document defines the procedure for verifying a container image before execution. A compliant consumer MUST implement this protocol.
+
+== 4. Verification Modes
+
+=== 4.1 Strict Mode
 
 All verification steps MUST pass. Any failure results in rejection.
 
-=== 3.2 Permissive Mode
+=== 4.2 Permissive Mode
 
 Verification is attempted. Failures result in warnings but execution proceeds. Recommended only for development/testing.
 
-=== 3.3 Audit Mode
+=== 4.3 Audit Mode
 
 Verification is performed and logged but does not affect execution. Used for gradual rollout.
 
-== 4. Verification Procedure
+== 5. Verification Procedure
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -82,16 +102,16 @@ Verification is performed and logged but does not affect execution. Used for gra
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-== 5. Step-by-Step Protocol
+== 6. Step-by-Step Protocol
 
-=== 5.1 Resolve Image Reference
+=== 6.1 Resolve Image Reference
 
 Input: Image reference (e.g., `registry.example.com/image:tag` or digest)
 
 1. If reference is a tag, resolve to digest
 2. Store the canonical digest: `sha256:<hex>`
 
-=== 5.2 Fetch Attestation Bundle
+=== 6.2 Fetch Attestation Bundle
 
 1. Query OCI Referrers API for the image digest
 2. Filter for `artifactType: application/vnd.verified-container.bundle+json`
@@ -101,7 +121,7 @@ Input: Image reference (e.g., `registry.example.com/image:tag` or digest)
 4. Fetch the bundle blob
 5. Store for subsequent steps
 
-=== 5.3 Parse Bundle
+=== 6.3 Parse Bundle
 
 1. Validate JSON structure
 2. Verify `mediaType` matches expected value
@@ -109,15 +129,15 @@ Input: Image reference (e.g., `registry.example.com/image:tag` or digest)
 4. Extract `attestations` and `logEntries` arrays
 5. If parsing fails: REJECT with `MALFORMED_BUNDLE`
 
-=== 5.4 Verify Subject Match
+=== 6.4 Verify Subject Match
 
 For each attestation in the bundle:
 
 1. Extract `subject[].digest.sha256`
-2. Verify it matches the image digest from step 5.1
+2. Verify it matches the image digest from step 6.1
 3. If any mismatch: REJECT with `SUBJECT_MISMATCH`
 
-=== 5.5 Verify Signatures
+=== 6.5 Verify Signatures
 
 For each attestation:
 
@@ -129,7 +149,7 @@ For each attestation:
 6. Verify Ed25519 signature over payload
 7. If verification fails: REJECT with `INVALID_SIGNATURE`
 
-=== 5.6 Verify Log Inclusion
+=== 6.6 Verify Log Inclusion
 
 1. Count distinct `logId` values in `logEntries`
 2. If fewer than 2 distinct logs: REJECT with `INSUFFICIENT_LOG_COVERAGE`
@@ -139,13 +159,13 @@ For each attestation:
    c. Verify Merkle inclusion proof
 4. If any proof fails: REJECT with `LOG_PROOF_INVALID`
 
-=== 5.7 Verify Threshold Signature
+=== 6.7 Verify Threshold Signature
 
 1. Identify the threshold group (e.g., `release-signers`)
 2. Count valid signatures from group members
 3. If count < k: REJECT with `THRESHOLD_NOT_MET`
 
-=== 5.8 Record Result
+=== 6.8 Record Result
 
 1. Log verification result with:
    - Image digest
@@ -155,7 +175,7 @@ For each attestation:
    - Error code if rejected
 2. Return result to caller
 
-== 6. Error Codes
+== 7. Error Codes
 
 [cols="2,3,2"]
 |===
@@ -202,7 +222,7 @@ For each attestation:
 | Producer must obtain more signatures
 |===
 
-== 7. Caching
+== 8. Caching
 
 Consumers MAY cache verification results:
 
@@ -215,7 +235,7 @@ Cache MUST be invalidated when:
 * A key is revoked
 * User requests fresh verification
 
-== 8. Offline Verification
+== 9. Offline Verification
 
 When network access is unavailable:
 
@@ -226,27 +246,52 @@ When network access is unavailable:
 
 Offline verification provides the same security guarantees as online, given the bundle was previously verified online.
 
-== 9. Implementation Requirements
+== 10. Implementation Requirements
 
-=== 9.1 Cryptographic Operations
+=== 10.1 Cryptographic Operations
 
 All cryptographic operations SHOULD be implemented in:
 * Memory-safe language (Rust, Ada/SPARK)
 * Or use audited cryptographic libraries
 * Constant-time comparison for signatures
 
-=== 9.2 Formal Verification (RECOMMENDED)
+=== 10.2 Formal Verification (RECOMMENDED)
 
 Security-critical verification code SHOULD be formally verified to prove:
 * Absence of runtime errors
 * Correct signature verification
 * No information leakage
 
-=== 9.3 Audit Logging
+=== 10.3 Audit Logging
 
 All verification decisions MUST be logged with sufficient detail for forensic analysis.
 
-== 10. Changelog
+== 11. Security Considerations
+
+=== 11.1 Time-of-Check to Time-of-Use (TOCTOU)
+
+Between verification and execution, the image could theoretically be replaced. Implementations SHOULD:
+* Pin the image by digest, not tag
+* Verify immediately before execution
+* Use content-addressable storage
+
+=== 11.2 Denial of Service
+
+Attackers may attempt to exhaust resources via:
+* Large attestation bundles
+* Many log entries
+* Complex proofs
+
+Implementations SHOULD:
+* Limit bundle size
+* Limit log entry count
+* Timeout verification operations
+
+=== 11.3 Side-Channel Attacks
+
+Signature verification timing may leak information. Use constant-time comparison for all cryptographic operations.
+
+== 12. Changelog
 
 === 0.1.0 (2024-12-28)
 - Initial specification

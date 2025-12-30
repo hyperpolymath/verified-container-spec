@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "id": "producer-conformance-profile",
+  "name": "Producer Conformance Profile",
+  "version": "0.1.0",
+  "description": "Conformance requirements for systems that create verified container artifacts",
+  "levels": {
+    "basic": {
+      "description": "Minimum requirements for a conforming producer",
+      "required": true,
+      "tests": [
+        {
+          "id": "PROD-B-001",
+          "name": "Create valid attestation bundle",
+          "command": "create-bundle",
+          "input": {
+            "attestations": "vectors/valid/attestation-bundle/minimal-valid-bundle.json#/input/attestations",
+            "logEntries": "vectors/valid/attestation-bundle/minimal-valid-bundle.json#/input/logEntries"
+          },
+          "expected": {
+            "exitCode": 0,
+            "schemaValid": true
+          }
+        },
+        {
+          "id": "PROD-B-002",
+          "name": "Sign in-toto statement with Ed25519",
+          "command": "sign",
+          "input": {
+            "statement": "examples/happy-path/producer-flow.json#/steps/0/input"
+          },
+          "expected": {
+            "exitCode": 0,
+            "signatureValid": true
+          }
+        },
+        {
+          "id": "PROD-B-003",
+          "name": "Include required attestation types",
+          "command": "create-bundle",
+          "validation": {
+            "hasProvenanceAttestation": true,
+            "hasSbomAttestation": true
+          }
+        },
+        {
+          "id": "PROD-B-004",
+          "name": "Include minimum 2 log entries",
+          "command": "create-bundle",
+          "validation": {
+            "logEntryCount": { "minimum": 2 }
+          }
+        },
+        {
+          "id": "PROD-B-005",
+          "name": "Canonicalize JSON correctly",
+          "command": "canonicalize",
+          "input": "vectors/adversarial/canonicalization/key-ordering.json#/input",
+          "expected": {
+            "output": "vectors/adversarial/canonicalization/key-ordering.json#/expected/canonical"
+          }
+        }
+      ]
+    },
+    "moderate": {
+      "description": "Enhanced producer capabilities",
+      "required": false,
+      "tests": [
+        {
+          "id": "PROD-M-001",
+          "name": "Submit to multiple transparency logs",
+          "type": "integration",
+          "validation": {
+            "distinctLogIds": { "minimum": 2 }
+          }
+        },
+        {
+          "id": "PROD-M-002",
+          "name": "Handle log submission failure gracefully",
+          "type": "error-handling",
+          "scenario": "One log returns 503",
+          "expected": {
+            "retryBehavior": true,
+            "fallbackToOtherLogs": true
+          }
+        },
+        {
+          "id": "PROD-M-003",
+          "name": "Generate valid SLSA Provenance v1",
+          "command": "create-bundle",
+          "validation": {
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "slsaSchemaValid": true
+          }
+        },
+        {
+          "id": "PROD-M-004",
+          "name": "Generate valid SPDX SBOM",
+          "command": "create-bundle",
+          "validation": {
+            "predicateType": "https://spdx.dev/Document",
+            "spdxSchemaValid": true
+          }
+        }
+      ]
+    },
+    "full": {
+      "description": "Full producer conformance",
+      "required": false,
+      "tests": [
+        {
+          "id": "PROD-F-001",
+          "name": "Support threshold signing",
+          "command": "sign",
+          "input": {
+            "signingScheme": "frost-ed25519",
+            "threshold": { "k": 2, "n": 3 }
+          },
+          "expected": {
+            "thresholdSignatureValid": true
+          }
+        },
+        {
+          "id": "PROD-F-002",
+          "name": "Attach bundle via OCI Referrers API",
+          "type": "integration",
+          "validation": {
+            "referrerMediaType": "application/vnd.verified-container.bundle+json"
+          }
+        },
+        {
+          "id": "PROD-F-003",
+          "name": "Sign trust store updates",
+          "command": "sign",
+          "input": {
+            "document": "trust-store-update"
+          },
+          "expected": {
+            "signatureValid": true
+          }
+        }
+      ]
+    }
+  },
+  "scoring": {
+    "basic": { "required": true, "points": 0 },
+    "moderate": { "required": false, "points": 50 },
+    "full": { "required": false, "points": 100 }
+  }
+}

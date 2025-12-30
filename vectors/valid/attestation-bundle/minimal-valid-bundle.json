@@ -1,0 +1,55 @@
+{
+  "id": "valid-bundle-001",
+  "description": "Minimal valid attestation bundle with required fields",
+  "specSection": "attestation-bundle.adoc#3",
+  "category": "valid",
+  "input": {
+    "mediaType": "application/vnd.verified-container.bundle+json",
+    "version": "0.1.0",
+    "attestations": [
+      {
+        "payloadType": "application/vnd.in-toto+json",
+        "payload": "eyJfdHlwZSI6Imh0dHBzOi8vaW4tdG90by5pby9TdGF0ZW1lbnQvdjEiLCJzdWJqZWN0IjpbeyJuYW1lIjoicmVnaXN0cnkuZXhhbXBsZS5jb20vaW1hZ2UiLCJkaWdlc3QiOnsic2hhMjU2IjoiYWJjMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZiJ9fV0sInByZWRpY2F0ZVR5cGUiOiJodHRwczovL3Nsc2EuZGV2L3Byb3ZlbmFuY2UvdjEiLCJwcmVkaWNhdGUiOnt9fQ==",
+        "signatures": [
+          {
+            "keyid": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "sig": "TUVVQ0lRRHg="
+          }
+        ]
+      }
+    ],
+    "logEntries": [
+      {
+        "logId": "verified-container-log-eu",
+        "logIndex": 12345,
+        "integratedTime": "2024-12-28T12:00:00Z",
+        "inclusionProof": {
+          "logIndex": 12345,
+          "rootHash": "abc123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd",
+          "treeSize": 67890,
+          "hashes": [
+            "def456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01"
+          ]
+        },
+        "signedEntryTimestamp": "TUVVQ0lRRHg="
+      },
+      {
+        "logId": "verified-container-log-us",
+        "logIndex": 54321,
+        "integratedTime": "2024-12-28T12:00:01Z",
+        "inclusionProof": {
+          "logIndex": 54321,
+          "rootHash": "xyz789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123",
+          "treeSize": 98765,
+          "hashes": [
+            "uvw123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
+          ]
+        },
+        "signedEntryTimestamp": "TUVRQ0lBbz0="
+      }
+    ]
+  },
+  "expected": {
+    "valid": true
+  }
+}

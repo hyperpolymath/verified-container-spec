@@ -1,0 +1,83 @@
+= Test Vectors
+:spec-version: 0.1.0
+
+== Overview
+
+This directory contains test vectors for validating implementations of the Verified Container Specification.
+
+== Directory Structure
+
+```
+vectors/
+├── valid/                    # Valid documents that MUST be accepted
+│   ├── attestation-bundle/
+│   ├── trust-store/
+│   └── transparency-log/
+├── invalid/                  # Invalid documents that MUST be rejected
+│   ├── attestation-bundle/
+│   ├── trust-store/
+│   └── transparency-log/
+├── adversarial/              # Edge cases and attack scenarios
+│   ├── canonicalization/
+│   ├── signature/
+│   └── proof/
+└── canonicalization/         # Canonicalization test cases
+```
+
+== Vector Format
+
+Each test vector is a JSON file with the following structure:
+
+```json
+{
+  "id": "unique-test-id",
+  "description": "Human-readable description",
+  "specSection": "4.3.1",
+  "category": "valid|invalid|adversarial",
+  "input": { /* test input */ },
+  "expected": {
+    "valid": true|false,
+    "errorCode": "ERROR_CODE (if invalid)",
+    "digest": "sha256:... (if applicable)"
+  }
+}
+```
+
+== Running Vectors
+
+```bash
+# Validate all vectors
+just vectors-validate
+
+# Run specific category
+just vectors-validate --category valid
+
+# Run specific format
+just vectors-validate --format attestation-bundle
+```
+
+== Adding Vectors
+
+1. Create vector file following naming convention: `{category}-{number}-{description}.json`
+2. Include all required metadata fields
+3. Run `just vectors-validate` to verify format
+4. Add description to appropriate section below
+
+== Vector Categories
+
+=== Valid Vectors
+
+Implementations MUST accept these inputs without error.
+
+=== Invalid Vectors
+
+Implementations MUST reject these inputs with the specified error code.
+
+=== Adversarial Vectors
+
+Edge cases designed to test robustness:
+
+* Canonicalization traps
+* Signature edge cases
+* Proof manipulation attempts
+* Unicode edge cases

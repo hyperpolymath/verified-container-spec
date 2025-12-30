@@ -1,0 +1,65 @@
+= Conformance Testing
+:spec-version: 0.1.0
+
+== Overview
+
+This directory contains the conformance testing framework for Verified Container Specification implementations.
+
+== Directory Structure
+
+```
+conformance/
+├── runner/               # Language-agnostic conformance runner
+│   ├── runner.adoc       # Runner specification
+│   └── cli-contract.json # CLI input/output contract
+├── profiles/             # Conformance profiles
+│   ├── producer.json     # Producer conformance tests
+│   └── consumer.json     # Consumer conformance tests
+└── results/              # Test result storage (gitignored)
+```
+
+== Running Conformance Tests
+
+```bash
+# Test a producer implementation
+just conformance-run --profile producer --impl ./my-producer
+
+# Test a consumer implementation
+just conformance-run --profile consumer --impl ./my-consumer
+
+# Run all profiles
+just conformance-run --all --impl ./my-impl
+```
+
+== Conformance Levels
+
+[cols="1,3"]
+|===
+| Level | Description
+
+| Basic
+| Parse and generate wire formats, basic validation
+
+| Moderate
+| Full verification protocol, log proof validation
+
+| Full
+| Threshold signatures, offline mode, caching, all edge cases
+|===
+
+== Implementing a Conformance Runner
+
+Implementations must expose a CLI with the following contract:
+
+```bash
+# Validate input
+./my-impl validate --type attestation-bundle --input bundle.json
+
+# Verify bundle (consumer)
+./my-impl verify --bundle bundle.json --trust-store trust.json
+
+# Create bundle (producer)
+./my-impl create-bundle --attestations atts.json --log-entries logs.json
+```
+
+See `runner/cli-contract.json` for the complete specification.

@@ -1,0 +1,41 @@
+{
+  "id": "policy-reject-expired-key",
+  "description": "Verification fails because signing key has expired",
+  "flow": "consumer",
+  "scenario": "The trust store contains a key that was valid when the attestation was signed, but has since expired",
+  "trustStore": {
+    "keys": {
+      "builders": [
+        {
+          "id": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "algorithm": "ed25519",
+          "publicKey": "MCowBQYDK2VwAyEAGb9F2CMCwMPPBmrZJJNtFe0BzLXmVr3QBT7Q4joZt0Y=",
+          "validFrom": "2023-01-01T00:00:00Z",
+          "validUntil": "2024-01-01T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "bundle": {
+    "attestations": [
+      {
+        "payloadType": "application/vnd.in-toto+json",
+        "payload": "...",
+        "signatures": [
+          {
+            "keyid": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "sig": "valid-signature-made-in-2023"
+          }
+        ]
+      }
+    ]
+  },
+  "verificationTime": "2024-12-28T00:00:00Z",
+  "expectedOutcome": {
+    "success": false,
+    "decision": "REJECT",
+    "errorCode": "EXPIRED_KEY",
+    "message": "Key sha256:0123... expired on 2024-01-01T00:00:00Z",
+    "recovery": "Producer must re-sign attestations with a currently valid key"
+  }
+}

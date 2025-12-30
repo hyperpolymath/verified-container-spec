@@ -1,0 +1,59 @@
+{
+  "id": "policy-reject-threshold-fail",
+  "description": "Verification fails because threshold signature requirement is not met",
+  "flow": "consumer",
+  "scenario": "The trust store requires 2-of-3 release signers, but the bundle only has 1 valid signature",
+  "trustStore": {
+    "keys": {
+      "releasers": [
+        {
+          "id": "sha256:alice123",
+          "algorithm": "ed25519",
+          "publicKey": "...",
+          "validFrom": "2024-01-01T00:00:00Z"
+        },
+        {
+          "id": "sha256:bob456",
+          "algorithm": "ed25519",
+          "publicKey": "...",
+          "validFrom": "2024-01-01T00:00:00Z"
+        },
+        {
+          "id": "sha256:carol789",
+          "algorithm": "ed25519",
+          "publicKey": "...",
+          "validFrom": "2024-01-01T00:00:00Z"
+        }
+      ]
+    },
+    "thresholds": {
+      "release-signers": {
+        "k": 2,
+        "n": 3,
+        "algorithm": "frost-ed25519",
+        "members": ["sha256:alice123", "sha256:bob456", "sha256:carol789"]
+      }
+    }
+  },
+  "bundle": {
+    "attestations": [
+      {
+        "payloadType": "application/vnd.in-toto+json",
+        "payload": "...",
+        "signatures": [
+          {
+            "keyid": "sha256:alice123",
+            "sig": "valid-signature-from-alice"
+          }
+        ]
+      }
+    ]
+  },
+  "expectedOutcome": {
+    "success": false,
+    "decision": "REJECT",
+    "errorCode": "THRESHOLD_NOT_MET",
+    "message": "Threshold group 'release-signers' requires 2 signatures, found 1",
+    "recovery": "Producer must obtain additional signatures from threshold group members"
+  }
+}

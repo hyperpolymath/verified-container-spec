@@ -1,0 +1,55 @@
+{
+  "id": "valid-trust-store-001",
+  "description": "Minimal valid trust store with required fields",
+  "specSection": "trust-store.adoc#6",
+  "category": "valid",
+  "input": {
+    "$schema": "https://verified-container.org/schema/trust-store-v1.json",
+    "version": 1,
+    "id": "test-trust-store",
+    "updated": "2024-12-28T00:00:00Z",
+    "keys": {
+      "builders": [
+        {
+          "id": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "algorithm": "ed25519",
+          "publicKey": "MCowBQYDK2VwAyEAGb9F2CMCwMPPBmrZJJNtFe0BzLXmVr3QBT7Q4joZt0Y=",
+          "validFrom": "2024-01-01T00:00:00Z"
+        }
+      ]
+    },
+    "thresholds": {
+      "release-signers": {
+        "k": 1,
+        "n": 1,
+        "algorithm": "frost-ed25519",
+        "members": [
+          "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        ]
+      }
+    },
+    "logs": {
+      "verified-container-log-eu": {
+        "operator": "EU Transparency Operator",
+        "publicKey": "MCowBQYDK2VwAyEAGb9F2CMCwMPPBmrZJJNtFe0BzLXmVr3QBT7Q4joZt0Y=",
+        "url": "https://log-eu.verified-container.org",
+        "algorithm": "ed25519"
+      },
+      "verified-container-log-us": {
+        "operator": "US Transparency Operator",
+        "publicKey": "MCowBQYDK2VwAyEAGb9F2CMCwMPPBmrZJJNtFe0BzLXmVr3QBT7Q4joZt0Y=",
+        "url": "https://log-us.verified-container.org",
+        "algorithm": "ed25519"
+      },
+      "verified-container-log-ap": {
+        "operator": "APAC Transparency Operator",
+        "publicKey": "MCowBQYDK2VwAyEAGb9F2CMCwMPPBmrZJJNtFe0BzLXmVr3QBT7Q4joZt0Y=",
+        "url": "https://log-ap.verified-container.org",
+        "algorithm": "ed25519"
+      }
+    }
+  },
+  "expected": {
+    "valid": true
+  }
+}

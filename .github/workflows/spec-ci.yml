@@ -1,0 +1,174 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Specification CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  schema-validate:
+    name: Validate JSON Schemas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ajv-cli
+        run: npm install -g ajv-cli ajv-formats
+
+      - name: Validate schemas are valid JSON Schema
+        run: |
+          for schema in schema/*.schema.json; do
+            echo "Validating $schema..."
+            ajv compile -s "$schema" --spec=draft2020 -c ajv-formats
+          done
+
+      - name: Validate valid vectors against schemas
+        run: |
+          # Validate trust store vectors
+          for vector in vectors/valid/trust-store/*.json; do
+            echo "Validating $vector..."
+            jq '.input' "$vector" | ajv validate -s schema/trust-store.schema.json --spec=draft2020 -c ajv-formats -d /dev/stdin
+          done
+
+          # Validate attestation bundle vectors
+          for vector in vectors/valid/attestation-bundle/*.json; do
+            echo "Validating $vector..."
+            jq '.input' "$vector" | ajv validate -s schema/attestation-bundle.schema.json --spec=draft2020 -c ajv-formats -d /dev/stdin
+          done
+
+  vectors-validate:
+    name: Validate Test Vectors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate vector format
+        run: |
+          # Check all vectors have required fields
+          for vector in vectors/**/*.json; do
+            echo "Checking $vector..."
+            jq -e '.id and .description and .category and .expected' "$vector" > /dev/null || {
+              echo "ERROR: $vector missing required fields"
+              exit 1
+            }
+          done
+
+      - name: Check for duplicate vector IDs
+        run: |
+          ids=$(find vectors -name "*.json" -exec jq -r '.id' {} \; | sort)
+          duplicates=$(echo "$ids" | uniq -d)
+          if [ -n "$duplicates" ]; then
+            echo "ERROR: Duplicate vector IDs found:"
+            echo "$duplicates"
+            exit 1
+          fi
+
+  spec-style-lint:
+    name: Specification Style Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check spec documents have required sections
+        run: |
+          required_sections=("Scope" "Terminology" "Security Considerations" "Changelog")
+
+          for spec in spec/*.adoc; do
+            echo "Checking $spec..."
+            for section in "${required_sections[@]}"; do
+              if ! grep -qi "== .*$section" "$spec"; then
+                echo "WARNING: $spec may be missing section: $section"
+              fi
+            done
+          done
+
+      - name: Check for RFC 2119 terminology reference
+        run: |
+          for spec in spec/*.adoc; do
+            if grep -q "MUST\|SHALL\|SHOULD\|MAY" "$spec"; then
+              if ! grep -qi "RFC.2119\|rfc2119" "$spec"; then
+                echo "WARNING: $spec uses normative language but may not reference RFC 2119"
+              fi
+            fi
+          done
+
+  conformance-selftest:
+    name: Conformance Runner Self-Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate conformance profiles
+        run: |
+          for profile in conformance/profiles/*.json; do
+            echo "Validating $profile..."
+            jq -e '.id and .name and .version and .levels' "$profile" > /dev/null || {
+              echo "ERROR: $profile missing required fields"
+              exit 1
+            }
+          done
+
+      - name: Check CLI contract completeness
+        run: |
+          jq -e '.commands | keys | length > 0' conformance/runner/cli-contract.json > /dev/null || {
+            echo "ERROR: CLI contract has no commands"
+            exit 1
+          }
+
+  examples-validate:
+    name: Validate Examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate example format
+        run: |
+          for example in examples/**/*.json; do
+            echo "Checking $example..."
+            jq -e '.id and .description and .flow' "$example" > /dev/null || {
+              echo "ERROR: $example missing required fields"
+              exit 1
+            }
+          done
+
+  pr-labels:
+    name: Check PR Labels
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for spec changes
+        id: spec-changes
+        run: |
+          if git diff --name-only origin/main...HEAD | grep -q '^spec/'; then
+            echo "spec_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "spec_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for schema changes
+        id: schema-changes
+        run: |
+          if git diff --name-only origin/main...HEAD | grep -q '^schema/'; then
+            echo "schema_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "schema_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Warn about unlabeled normative changes
+        if: steps.spec-changes.outputs.spec_changed == 'true' || steps.schema-changes.outputs.schema_changed == 'true'
+        run: |
+          echo "::warning::This PR modifies specification or schema files. Please ensure appropriate labels are applied."
+          echo "Consider: normative-change, breaking-change, schema, vectors, security-considerations"
