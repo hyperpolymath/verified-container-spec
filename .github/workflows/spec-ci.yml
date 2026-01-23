@@ -16,7 +16,7 @@ jobs:
     name: Validate JSON Schemas
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.1
+      - uses: actions/checkout@v6.0.2
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -51,7 +51,7 @@ jobs:
     name: Validate Test Vectors
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.1
+      - uses: actions/checkout@v6.0.2
 
       - name: Validate vector format
         run: |
@@ -78,7 +78,7 @@ jobs:
     name: Specification Style Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.1
+      - uses: actions/checkout@v6.0.2
 
       - name: Check spec documents have required sections
         run: |
@@ -107,7 +107,7 @@ jobs:
     name: Conformance Runner Self-Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.1
+      - uses: actions/checkout@v6.0.2
 
       - name: Validate conformance profiles
         run: |
@@ -130,7 +130,7 @@ jobs:
     name: Validate Examples
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.1
+      - uses: actions/checkout@v6.0.2
 
       - name: Validate example format
         run: |
@@ -147,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v6.0.1
+      - uses: actions/checkout@v6.0.2
 
       - name: Check for spec changes
         id: spec-changes
