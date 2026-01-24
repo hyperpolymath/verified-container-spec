@@ -1,0 +1,61 @@
+# Axiom.jl SMT Solver Runner Container
+#
+# Isolated execution environment for SMT solvers used in formal verification.
+# Uses cerro-torre as base for supply-chain verified dependencies.
+#
+# Security features:
+# - Process isolation via namespaces
+# - Resource limits via cgroups
+# - Seccomp filter for syscall restrictions
+# - Read-only root filesystem
+# - No network access
+# - Temporary filesystem for solver scripts
+
+FROM ghcr.io/hyperpolymath/cerro-torre:latest
+
+LABEL org.opencontainers.image.title="Axiom SMT Runner"
+LABEL org.opencontainers.image.description="Isolated SMT solver execution for Axiom.jl formal verification"
+LABEL org.opencontainers.image.vendor="hyperpolymath"
+LABEL org.opencontainers.image.licenses="MPL-2.0"
+LABEL org.opencontainers.image.source="https://github.com/hyperpolymath/verified-container-spec"
+
+# Install Guix package manager for reproducible SMT solver installation
+# Guix provides bit-for-bit reproducible builds with cryptographic verification
+RUN apk add --no-cache guix
+
+# Add Guix channel for SMT solvers
+COPY channels.scm /etc/guix/channels.scm
+
+# Install SMT solvers via Guix (reproducible + verified)
+# Z3, CVC5, Yices, and MathSAT are on the allow-list
+RUN guix pull --channels=/etc/guix/channels.scm && \
+    guix install z3 cvc5 yices mathsat && \
+    guix gc  # Clean up build artifacts
+
+# Create non-root user for solver execution
+RUN adduser -D -u 1000 axiom-solver
+
+# Create directories for solver execution
+RUN mkdir -p /tmp/solver-workspace && \
+    chown axiom-solver:axiom-solver /tmp/solver-workspace && \
+    chmod 700 /tmp/solver-workspace
+
+# Copy solver runner script
+COPY solver-runner.sh /usr/local/bin/solver-runner
+RUN chmod 755 /usr/local/bin/solver-runner
+
+# Switch to non-root user
+USER axiom-solver
+
+# Set working directory
+WORKDIR /tmp/solver-workspace
+
+# Health check - verify solvers are available
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD z3 --version && cvc5 --version || exit 1
+
+# Default entrypoint
+ENTRYPOINT ["/usr/local/bin/solver-runner"]
+
+# Default command shows usage
+CMD ["--help"]

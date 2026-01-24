@@ -1,0 +1,204 @@
+{
+  "$schema": "https://github.com/hyperpolymath/svalinn/blob/main/schema/policy-v1.schema.json",
+  "version": "1.0",
+  "name": "axiom-smt-runner",
+  "description": "Security policy for Axiom.jl SMT solver execution",
+  "enforcement": "strict",
+
+  "namespaces": {
+    "pid": "isolated",
+    "network": "none",
+    "ipc": "isolated",
+    "uts": "isolated",
+    "mount": "isolated",
+    "user": "mapped"
+  },
+
+  "capabilities": {
+    "drop": ["ALL"],
+    "add": []
+  },
+
+  "resources": {
+    "cpu": {
+      "limit": "2.0",
+      "shares": 1024
+    },
+    "memory": {
+      "limit": "2GB",
+      "swap": "0"
+    },
+    "pids": {
+      "limit": 100
+    }
+  },
+
+  "filesystem": {
+    "root": "readonly",
+    "tmpfs": [
+      {
+        "target": "/tmp/solver-workspace",
+        "size": "100MB",
+        "mode": "0700",
+        "uid": 1000,
+        "gid": 1000
+      }
+    ],
+    "mounts": {
+      "allow_bind": false,
+      "allow_devices": false,
+      "allowed_paths": [
+        "/tmp/solver-workspace"
+      ]
+    }
+  },
+
+  "seccomp": {
+    "default_action": "SCMP_ACT_ERRNO",
+    "syscalls": {
+      "allow": [
+        "read",
+        "write",
+        "open",
+        "openat",
+        "close",
+        "stat",
+        "fstat",
+        "lstat",
+        "poll",
+        "lseek",
+        "mmap",
+        "mprotect",
+        "munmap",
+        "brk",
+        "rt_sigaction",
+        "rt_sigprocmask",
+        "ioctl",
+        "access",
+        "pipe",
+        "select",
+        "sched_yield",
+        "mremap",
+        "dup",
+        "dup2",
+        "nanosleep",
+        "getpid",
+        "clone",
+        "fork",
+        "vfork",
+        "execve",
+        "exit",
+        "exit_group",
+        "wait4",
+        "uname",
+        "fcntl",
+        "getdents",
+        "getcwd",
+        "chdir",
+        "fchdir",
+        "readlink",
+        "getuid",
+        "getgid",
+        "geteuid",
+        "getegid",
+        "getppid",
+        "getpgrp",
+        "setsid",
+        "getrlimit",
+        "getrusage",
+        "times",
+        "time",
+        "futex",
+        "set_tid_address",
+        "clock_gettime",
+        "clock_getres",
+        "clock_nanosleep",
+        "arch_prctl",
+        "set_robust_list",
+        "get_robust_list",
+        "prlimit64",
+        "getrandom"
+      ],
+      "deny": [
+        "socket",
+        "connect",
+        "accept",
+        "sendto",
+        "recvfrom",
+        "sendmsg",
+        "recvmsg",
+        "bind",
+        "listen",
+        "ptrace",
+        "personality",
+        "setns",
+        "unshare",
+        "mount",
+        "umount",
+        "pivot_root",
+        "chroot",
+        "reboot",
+        "kexec_load"
+      ]
+    }
+  },
+
+  "environment": {
+    "allow_host_env": false,
+    "allowed_vars": [
+      "PATH",
+      "HOME",
+      "USER",
+      "TERM"
+    ],
+    "set": {
+      "PATH": "/usr/local/bin:/usr/bin:/bin",
+      "HOME": "/tmp/solver-workspace",
+      "USER": "axiom-solver"
+    }
+  },
+
+  "execution": {
+    "user": {
+      "uid": 1000,
+      "gid": 1000,
+      "supplementary_gids": []
+    },
+    "working_dir": "/tmp/solver-workspace",
+    "no_new_privileges": true,
+    "readonly_paths": [
+      "/",
+      "/usr",
+      "/bin",
+      "/lib",
+      "/lib64",
+      "/etc"
+    ]
+  },
+
+  "attestation": {
+    "require_signed": true,
+    "trusted_issuers": [
+      "hyperpolymath-ci",
+      "cerro-torre-builder"
+    ],
+    "min_slsa_level": 3,
+    "require_provenance": true
+  },
+
+  "transparency": {
+    "require_log_entry": true,
+    "log_urls": [
+      "https://rekor.sigstore.dev",
+      "https://transparency.hyperpolymath.io"
+    ],
+    "min_log_quorum": 2
+  },
+
+  "monitoring": {
+    "log_executions": true,
+    "log_syscalls": false,
+    "log_file_access": true,
+    "alert_on_policy_violation": true
+  }
+}

@@ -1,0 +1,167 @@
+= Axiom SMT Runner Container
+
+Supply-chain verified container for isolated SMT solver execution in Axiom.jl formal verification.
+
+== Overview
+
+This container provides a secure, reproducible environment for running SMT solvers (Z3, CVC5, Yices, MathSAT) during Axiom.jl's `@prove` verification.
+
+== Security Features
+
+=== Process Isolation
+* Runs as non-root user (`axiom-solver`, UID 1000)
+* PID, network, and mount namespaces
+* Read-only root filesystem
+* Temporary workspace for solver scripts only
+
+=== Resource Limits
+* CPU limit: 2 cores (configurable via cgroups)
+* Memory limit: 2GB (configurable via cgroups)
+* Timeout enforcement: Per-query timeout via `timeout(1)`
+
+=== Supply Chain Verification
+* Base image: `cerro-torre` (Ada/SPARK verified Linux distribution)
+* SMT solvers: Installed via Guix (reproducible, cryptographically verified)
+* No dynamic dependencies from untrusted sources
+
+=== Network Isolation
+* No network access (network namespace disabled)
+* Cannot communicate with external services
+* Cannot exfiltrate data
+
+== Build Instructions
+
+[source,bash]
+----
+# Build the container
+cd verified-container-spec/examples/axiom-smt-runner
+podman build -t axiom-smt-runner:latest -f Containerfile .
+
+# Or with Svalinn/Vordr (includes attestation)
+svalinn build -t axiom-smt-runner:latest -f Containerfile .
+----
+
+== Usage
+
+=== Direct Execution
+
+[source,bash]
+----
+# Run Z3 on a query
+echo "(assert (> x 0))\n(check-sat)" > /tmp/query.smt2
+podman run --rm \
+  --read-only \
+  --security-opt=no-new-privileges \
+  --cap-drop=ALL \
+  --network=none \
+  --memory=2g \
+  --cpus=2 \
+  -v /tmp/query.smt2:/tmp/query.smt2:ro \
+  axiom-smt-runner:latest \
+  z3 /tmp/query.smt2 30000
+----
+
+=== Via Axiom.jl
+
+Axiom.jl automatically uses this container when `AXIOM_SMT_RUNNER=container`:
+
+[source,julia]
+----
+using Axiom
+
+# Enable containerized SMT execution
+ENV["AXIOM_SMT_RUNNER"] = "container"
+ENV["AXIOM_SMT_CONTAINER_IMAGE"] = "axiom-smt-runner:latest"
+
+# Use @prove as normal - solvers run in container automatically
+@prove ∀x. x > 0 ⟹ (x + 1) > 0
+----
+
+== Integration with Svalinn/Vordr
+
+Svalinn/Vordr provides additional verification:
+
+[source,bash]
+----
+# Create security policy
+vordr policy create --template=smt-runner > svalinn-policy.json
+
+# Run with policy enforcement
+vordr run \
+  --policy=svalinn-policy.json \
+  --verify-attestation \
+  --image=axiom-smt-runner:latest \
+  -- z3 /tmp/query.smt2 30000
+----
+
+== Guix Reproducibility
+
+All solvers are installed via Guix for bit-for-bit reproducibility:
+
+[source,bash]
+----
+# Verify solver build is reproducible
+guix build z3 --check
+
+# Get solver hash
+guix hash $(guix build z3)
+
+# Compare with reference hash (should match)
+----
+
+== Allowed Solvers
+
+Only these SMT solvers are permitted (hardcoded in `solver-runner.sh`):
+
+|===
+| Solver | Provider | Homepage
+
+| Z3
+| Microsoft Research
+| https://github.com/Z3Prover/z3
+
+| CVC5
+| Stanford/Iowa
+| https://cvc5.github.io
+
+| Yices
+| SRI International
+| https://yices.csl.sri.com
+
+| MathSAT
+| FBK-IRST/University of Trento
+| https://mathsat.fbk.eu
+|===
+
+== Files
+
+[cols="1,3"]
+|===
+| File | Purpose
+
+| `Containerfile`
+| Container build specification
+
+| `channels.scm`
+| Guix channels for SMT solvers
+
+| `solver-runner.sh`
+| Entrypoint script with security checks
+
+| `svalinn-policy.json`
+| Security policy for Svalinn/Vordr runtime
+
+| `README.adoc`
+| This file
+|===
+
+== Related
+
+* link:../../../spec/verification-protocol.adoc[Verification Protocol Spec]
+* https://github.com/hyperpolymath/svalinn[Svalinn/Vordr Runtime]
+* https://github.com/hyperpolymath/cerro-torre[Cerro Torre Base Image]
+* https://github.com/hyperpolymath/Axiom.jl[Axiom.jl Framework]
+
+== License
+
+MPL-2.0
