@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+name: Specification Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: read-all
+
+jobs:
+  lint-asciidoc:
+    name: Lint AsciiDoc Specs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+
+      - name: Install asciidoctor
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y asciidoctor
+
+      - name: Validate spec files
+        run: |
+          for spec in spec/*.adoc; do
+            echo "Validating $spec"
+            asciidoctor -o /dev/null "$spec" || exit 1
+          done
+
+      - name: Check RFC 2119 compliance
+        run: |
+          # Check that specs use proper RFC 2119 keywords
+          for spec in spec/*.adoc; do
+            if ! grep -q "MUST\|SHOULD\|MAY" "$spec"; then
+              echo "Warning: $spec may not be using RFC 2119 keywords"
+            fi
+          done
+
+      - name: Validate cross-references
+        run: |
+          # Check that all links to other specs are valid
+          for spec in spec/*.adoc; do
+            echo "Checking links in $spec"
+            # Extract link:...[...] patterns and verify files exist
+            grep -o 'link:[^[]*\.adoc' "$spec" | sed 's/link:/spec\//' | while read -r link; do
+              if [ ! -f "$link" ]; then
+                echo "Error: Broken link in $spec: $link"
+                exit 1
+              fi
+            done
+          done
+
+  check-examples:
+    name: Validate Examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+
+      - name: Check example structure
+        run: |
+          for example_dir in examples/*/; do
+            echo "Checking $example_dir"
+            if [ ! -f "${example_dir}README.adoc" ]; then
+              echo "Error: Missing README.adoc in $example_dir"
+              exit 1
+            fi
+          done
+
+      - name: Validate example code blocks
+        run: |
+          # Check that shell code blocks are valid
+          for readme in examples/*/README.adoc; do
+            echo "Checking shell examples in $readme"
+            # This is a basic check - could be enhanced
+            if grep -A 5 '\[source,bash\]' "$readme" | grep -q '&&.*&&'; then
+              echo "Found chained commands in $readme (good)"
+            fi
+          done

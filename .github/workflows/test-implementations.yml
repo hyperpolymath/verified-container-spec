@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+name: Test Implementations
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: read-all
+
+jobs:
+  rust-shim:
+    name: Build Rust Containerd Shim
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2
+        with:
+          workspaces: implementations/containerd-shim
+
+      - name: Build shim
+        run: |
+          cd implementations/containerd-shim
+          cargo build --release
+
+      - name: Run tests
+        run: |
+          cd implementations/containerd-shim
+          cargo test
+
+      - name: Upload shim binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: containerd-shim-verified-container-v1
+          path: implementations/containerd-shim/target/release/containerd-shim-verified-container-v1
+
+  bash-tools:
+    name: Test Bash Implementations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq file shellcheck
+
+      - name: Lint nerdctl plugin
+        run: |
+          shellcheck implementations/nerdctl-plugin/nerdctl-verified-container
+
+      - name: Lint Podman hook
+        run: |
+          shellcheck implementations/podman-hook/verified-container-prestart
+
+      - name: Test nerdctl plugin --help
+        run: |
+          implementations/nerdctl-plugin/nerdctl-verified-container --help
+
+      - name: Test Podman hook JSON config
+        run: |
+          jq empty implementations/podman-hook/verified-container.json
+
+  build-test-bundles:
+    name: Build Test Bundles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+
+      - name: Build .ctp test bundles
+        run: |
+          cd vectors/runtime-integration
+          ./build-test-bundles.sh
+
+      - name: Verify bundles created
+        run: |
+          cd vectors/runtime-integration
+          ls -lh *.ctp
+          test -f valid-bundle.ctp
+          test -f insufficient-logs.ctp
+          test -f subject-mismatch.ctp
+          test -f missing-attestations.ctp
+
+      - name: Upload test bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-bundles
+          path: vectors/runtime-integration/*.ctp

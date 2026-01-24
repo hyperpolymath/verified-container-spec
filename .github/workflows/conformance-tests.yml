@@ -1,0 +1,98 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+name: Conformance Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: read-all
+
+jobs:
+  test-vectors:
+    name: Run Test Vectors
+    runs-on: ubuntu-latest
+    needs: [build]
+    strategy:
+      matrix:
+        vector:
+          - valid-bundle
+          - insufficient-logs
+          - subject-mismatch
+          - missing-attestations
+          - malformed-bundle
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+
+      - name: Download shim
+        uses: actions/download-artifact@v4
+        with:
+          name: containerd-shim-verified-container-v1
+          path: /tmp/
+
+      - name: Make shim executable
+        run: chmod +x /tmp/containerd-shim-verified-container-v1
+
+      - name: Download test bundles
+        uses: actions/download-artifact@v4
+        with:
+          name: test-bundles
+          path: vectors/runtime-integration/
+
+      - name: Run conformance test for ${{ matrix.vector }}
+        run: |
+          cd vectors/runtime-integration
+
+          # Read expected outcome
+          EXPECTED=$(jq -r '.outcome' ${{ matrix.vector }}/expected-outcome.json)
+          EXIT_CODE=$(jq -r '.exitCode' ${{ matrix.vector }}/expected-outcome.json)
+
+          echo "Testing ${{ matrix.vector }}"
+          echo "Expected outcome: $EXPECTED (exit code: $EXIT_CODE)"
+
+          # Run verification
+          set +e
+          /tmp/containerd-shim-verified-container-v1 ${{ matrix.vector }}.ctp --verify-mode=strict
+          ACTUAL_EXIT=$?
+          set -e
+
+          echo "Actual exit code: $ACTUAL_EXIT"
+
+          if [ "$ACTUAL_EXIT" -eq "$EXIT_CODE" ]; then
+            echo "✓ Test passed: ${{ matrix.vector }}"
+          else
+            echo "✗ Test failed: expected exit $EXIT_CODE, got $ACTUAL_EXIT"
+            exit 1
+          fi
+
+  build:
+    name: Build Test Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build shim
+        run: |
+          cd implementations/containerd-shim
+          cargo build --release
+
+      - name: Build test bundles
+        run: |
+          cd vectors/runtime-integration
+          ./build-test-bundles.sh
+
+      - name: Upload shim
+        uses: actions/upload-artifact@v4
+        with:
+          name: containerd-shim-verified-container-v1
+          path: implementations/containerd-shim/target/release/containerd-shim-verified-container-v1
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-bundles
+          path: vectors/runtime-integration/*.ctp
