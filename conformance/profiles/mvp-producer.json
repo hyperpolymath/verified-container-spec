@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "id": "mvp-producer-profile",
+  "name": "MVP Producer Profile",
+  "version": "0.1.0",
+  "description": "MVP producer profile for single-signer and single-log bundle creation",
+  "levels": {
+    "basic": {
+      "description": "Minimum requirements for MVP producer conformance",
+      "required": true,
+      "tests": [
+        {
+          "id": "MVP-PROD-B-001",
+          "name": "Create single-log attestation bundle",
+          "command": "create-bundle",
+          "input": {
+            "attestations": "vectors/valid/attestation-bundle/mvp-single-log-bundle.json#/input/attestations",
+            "logEntries": "vectors/valid/attestation-bundle/mvp-single-log-bundle.json#/input/logEntries"
+          },
+          "expected": {
+            "exitCode": 0,
+            "schemaValid": true
+          }
+        },
+        {
+          "id": "MVP-PROD-B-002",
+          "name": "Sign in-toto statement with Ed25519",
+          "command": "sign",
+          "input": {
+            "statement": "examples/happy-path/producer-flow.json#/steps/0/input"
+          },
+          "expected": {
+            "exitCode": 0,
+            "signatureValid": true
+          }
+        },
+        {
+          "id": "MVP-PROD-B-003",
+          "name": "Include required attestation types",
+          "command": "create-bundle",
+          "validation": {
+            "hasProvenanceAttestation": true,
+            "hasSbomAttestation": true
+          }
+        },
+        {
+          "id": "MVP-PROD-B-004",
+          "name": "Include minimum 1 log entry",
+          "command": "create-bundle",
+          "validation": {
+            "logEntryCount": { "minimum": 1 }
+          }
+        }
+      ]
+    }
+  },
+  "scoring": {
+    "basic": { "required": true, "points": 0 }
+  }
+}

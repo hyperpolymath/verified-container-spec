@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "id": "mvp-consumer-profile",
+  "name": "MVP Consumer Profile",
+  "version": "0.1.0",
+  "description": "MVP consumer profile for single-signer and single-log verification",
+  "levels": {
+    "basic": {
+      "description": "Minimum requirements for MVP consumer conformance",
+      "required": true,
+      "tests": [
+        {
+          "id": "MVP-CONS-B-001",
+          "name": "Parse valid attestation bundle",
+          "command": "validate",
+          "input": {
+            "type": "attestation-bundle",
+            "file": "vectors/valid/attestation-bundle/minimal-valid-bundle.json#/input"
+          },
+          "expected": {
+            "exitCode": 0,
+            "valid": true
+          }
+        },
+        {
+          "id": "MVP-CONS-B-002",
+          "name": "Parse valid trust store",
+          "command": "validate",
+          "input": {
+            "type": "trust-store",
+            "file": "vectors/valid/trust-store/minimal-valid-trust-store.json#/input"
+          },
+          "expected": {
+            "exitCode": 0,
+            "valid": true
+          }
+        },
+        {
+          "id": "MVP-CONS-B-003",
+          "name": "Verify bundle with single log entry",
+          "command": "verify",
+          "input": {
+            "bundle": "vectors/valid/attestation-bundle/mvp-single-log-bundle.json#/input",
+            "config": {
+              "logQuorum": 1
+            }
+          },
+          "expected": {
+            "exitCode": 0
+          }
+        }
+      ]
+    }
+  },
+  "scoring": {
+    "basic": { "required": true, "points": 0 }
+  }
+}
