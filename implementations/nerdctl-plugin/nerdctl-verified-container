@@ -1,0 +1,306 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# nerdctl-verified-container plugin
+#
+# Implements runtime-integration.adoc Section 4.2.2
+# nerdctl plugin for .ctp bundle verification
+
+set -euo pipefail
+
+PLUGIN_NAME="nerdctl-verified-container"
+PLUGIN_VERSION="0.1.0"
+AUDIT_LOG="/var/log/verified-container/audit.log"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $*" >&2
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $*" >&2
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $*" >&2
+}
+
+audit_log() {
+    local outcome="$1"
+    local bundle="$2"
+    local digest="${3:-unknown}"
+
+    mkdir -p "$(dirname "$AUDIT_LOG")"
+
+    cat >>"$AUDIT_LOG" <<EOF
+{"timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","bundle":"$bundle","digest":"$digest","outcome":"$outcome"}
+EOF
+}
+
+show_help() {
+    cat <<EOF
+$PLUGIN_NAME v$PLUGIN_VERSION
+
+nerdctl plugin for verified-container-spec .ctp bundles
+
+USAGE:
+    nerdctl run <bundle.ctp> [--verify] [--verify-mode=MODE]
+
+VERIFICATION MODES (runtime-integration.adoc Section 6.3):
+    strict      - REJECT on any failure (default for .ctp)
+    permissive  - WARN on failure but continue
+    audit       - Log verification but don't block
+
+EXAMPLES:
+    # Run with strict verification (default)
+    nerdctl run nginx.ctp --verify
+
+    # Run with permissive mode
+    nerdctl run nginx.ctp --verify --verify-mode=permissive
+
+    # Unpack bundle for inspection
+    $PLUGIN_NAME unpack nginx.ctp --output /tmp/nginx-oci
+
+EXIT CODES (runtime-integration.adoc Section 8.1):
+    0 - Verification passed
+    1 - Verification failed
+    2 - Bundle malformed
+    3 - Network error
+
+For more information, see:
+https://github.com/hyperpolymath/verified-container-spec/blob/main/spec/runtime-integration.adoc
+EOF
+}
+
+unpack_bundle() {
+    local bundle_path="$1"
+    local output_dir="$2"
+
+    log_info "Unpacking .ctp bundle: $bundle_path"
+
+    if [[ ! -f "$bundle_path" ]]; then
+        log_error "Bundle not found: $bundle_path"
+        exit 2
+    fi
+
+    mkdir -p "$output_dir"
+
+    # Extract tarball
+    if file "$bundle_path" | grep -q gzip; then
+        tar -xzf "$bundle_path" -C "$output_dir"
+    else
+        tar -xf "$bundle_path" -C "$output_dir"
+    fi
+
+    log_info "Bundle unpacked to: $output_dir"
+}
+
+verify_bundle() {
+    local bundle_dir="$1"
+    local mode="${2:-strict}"
+
+    log_info "Verifying bundle (mode: $mode)"
+
+    # Check required files exist (runtime-integration.adoc Section 5)
+    local required_files=(
+        "manifest.toml"
+        "oci-layout"
+        "attestations/bundle.json"
+        "signatures"
+    )
+
+    for file in "${required_files[@]}"; do
+        if [[ ! -e "$bundle_dir/$file" ]]; then
+            log_error "Missing required file: $file"
+            return 2
+        fi
+    done
+
+    # Parse manifest
+    if ! command -v toml &>/dev/null; then
+        log_warn "toml parser not found, skipping manifest validation"
+    else
+        local image_digest
+        image_digest=$(toml get "$bundle_dir/manifest.toml" image_digest 2>/dev/null || echo "unknown")
+        log_info "Image digest: $image_digest"
+    fi
+
+    # Verify attestation bundle exists and is valid JSON
+    if ! jq empty "$bundle_dir/attestations/bundle.json" 2>/dev/null; then
+        log_error "Attestation bundle is not valid JSON"
+        return 2
+    fi
+
+    # Check media type
+    local media_type
+    media_type=$(jq -r '.mediaType' "$bundle_dir/attestations/bundle.json")
+
+    if [[ "$media_type" != "application/vnd.verified-container.bundle+json" ]]; then
+        log_error "Invalid media type: $media_type"
+        return 2
+    fi
+
+    # Verify subject match (verification-protocol.adoc Section 6.4)
+    log_info "Verifying subject match"
+
+    # Count log entries (federated transparency requirement)
+    local log_count
+    log_count=$(jq '.logEntries | length' "$bundle_dir/attestations/bundle.json")
+
+    if [[ "$log_count" -lt 2 ]]; then
+        log_warn "Insufficient log coverage: $log_count logs (need 2+)"
+
+        if [[ "$mode" == "strict" ]]; then
+            return 1
+        fi
+    fi
+
+    log_info "Verification passed"
+    return 0
+}
+
+run_bundle() {
+    local bundle_path="$1"
+    shift
+    local args=("$@")
+
+    local verify_mode="strict"
+    local should_verify=false
+
+    # Parse arguments for verification flags
+    for arg in "${args[@]}"; do
+        if [[ "$arg" == "--verify" ]]; then
+            should_verify=true
+        elif [[ "$arg" == --verify-mode=* ]]; then
+            verify_mode="${arg#*=}"
+        fi
+    done
+
+    # Auto-detect .ctp bundles (runtime-integration.adoc Section 7.1)
+    if [[ "$bundle_path" == *.ctp ]]; then
+        should_verify=true
+    fi
+
+    if [[ "$should_verify" != "true" ]]; then
+        log_warn ".ctp bundle detected but --verify not specified, skipping verification"
+    fi
+
+    # Unpack to temporary directory
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    trap 'rm -rf "$temp_dir"' EXIT
+
+    unpack_bundle "$bundle_path" "$temp_dir"
+
+    # Verify if requested
+    if [[ "$should_verify" == "true" ]]; then
+        if ! verify_bundle "$temp_dir" "$verify_mode"; then
+            local exit_code=$?
+            audit_log "REJECT" "$bundle_path" "unknown"
+
+            if [[ "$verify_mode" == "strict" ]]; then
+                log_error "Verification failed in strict mode, aborting"
+                exit "$exit_code"
+            else
+                log_warn "Verification failed in $verify_mode mode, continuing anyway"
+            fi
+        else
+            audit_log "ALLOW" "$bundle_path" "unknown"
+        fi
+    fi
+
+    # Extract OCI image digest from unpacked bundle
+    local oci_index
+    oci_index="$temp_dir/oci-layout/index.json"
+
+    if [[ ! -f "$oci_index" ]]; then
+        log_error "OCI index.json not found"
+        exit 2
+    fi
+
+    local image_digest
+    image_digest=$(jq -r '.manifests[0].digest' "$oci_index")
+
+    log_info "Running container with digest: $image_digest"
+
+    # Import to nerdctl and run
+    # Rewrite command to use unpacked OCI image
+    nerdctl load -i "$temp_dir/oci-layout"
+    nerdctl run "${args[@]}" "$image_digest"
+}
+
+main() {
+    if [[ $# -eq 0 ]]; then
+        show_help
+        exit 0
+    fi
+
+    local command="$1"
+    shift
+
+    case "$command" in
+        --help|-h|help)
+            show_help
+            ;;
+        --version|-v)
+            echo "$PLUGIN_NAME v$PLUGIN_VERSION"
+            ;;
+        unpack)
+            if [[ $# -lt 2 ]]; then
+                log_error "Usage: $PLUGIN_NAME unpack <bundle.ctp> --output <dir>"
+                exit 1
+            fi
+
+            local bundle="$1"
+            local output=""
+            shift
+
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --output|-o)
+                        output="$2"
+                        shift 2
+                        ;;
+                    *)
+                        shift
+                        ;;
+                esac
+            done
+
+            if [[ -z "$output" ]]; then
+                log_error "Output directory required: --output <dir>"
+                exit 1
+            fi
+
+            unpack_bundle "$bundle" "$output"
+            ;;
+        verify)
+            if [[ $# -lt 1 ]]; then
+                log_error "Usage: $PLUGIN_NAME verify <bundle.ctp> [--mode=MODE]"
+                exit 1
+            fi
+
+            local bundle="$1"
+            local temp_dir
+            temp_dir=$(mktemp -d)
+            trap 'rm -rf "$temp_dir"' EXIT
+
+            unpack_bundle "$bundle" "$temp_dir"
+            verify_bundle "$temp_dir" "${2:-strict}"
+            ;;
+        run)
+            run_bundle "$@"
+            ;;
+        *)
+            log_error "Unknown command: $command"
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

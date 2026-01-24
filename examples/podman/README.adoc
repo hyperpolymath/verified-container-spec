@@ -1,0 +1,260 @@
+= Podman Integration Examples
+
+SPDX-License-Identifier: MIT OR Apache-2.0
+
+== Overview
+
+Examples for running `.ctp` bundles with Podman using OCI hooks.
+
+== Prerequisites
+
+[source,bash]
+----
+# Install Podman
+# Fedora/RHEL
+sudo dnf install podman
+
+# Install verified-container hook
+sudo cp ../../implementations/podman-hook/verified-container-prestart /usr/libexec/podman/
+sudo chmod +x /usr/libexec/podman/verified-container-prestart
+
+# Register hook
+sudo mkdir -p /usr/share/containers/oci/hooks.d
+sudo cp ../../implementations/podman-hook/verified-container.json /usr/share/containers/oci/hooks.d/
+
+# Verify installation
+podman info --debug | grep hooks
+----
+
+== Example 1: Basic Usage
+
+[source,bash]
+----
+# Run with verification
+podman run --annotation=io.podman.verified-container=true nginx.ctp --name web -p 8080:80
+
+# Check it's running
+podman ps
+
+# View logs
+podman logs web
+
+# Stop container
+podman stop web
+podman rm web
+----
+
+== Example 2: Verification Modes
+
+[source,bash]
+----
+# Strict mode (default)
+podman run \
+  --annotation=io.podman.verified-container=true \
+  --annotation=io.podman.verified-container.mode=strict \
+  nginx.ctp
+
+# Permissive mode
+podman run \
+  --annotation=io.podman.verified-container=true \
+  --annotation=io.podman.verified-container.mode=permissive \
+  nginx.ctp
+
+# Audit mode
+podman run \
+  --annotation=io.podman.verified-container=true \
+  --annotation=io.podman.verified-container.mode=audit \
+  nginx.ctp
+----
+
+== Example 3: Compose File
+
+Create `podman-compose.yml`:
+
+[source,yaml]
+----
+version: "3"
+services:
+  web:
+    image: nginx.ctp
+    annotations:
+      io.podman.verified-container: "true"
+      io.podman.verified-container.mode: "strict"
+    ports:
+      - "8080:80"
+
+  app:
+    image: myapp.ctp
+    annotations:
+      io.podman.verified-container: "true"
+      io.podman.verified-container.mode: "permissive"
+    depends_on:
+      - web
+    ports:
+      - "3000:3000"
+----
+
+Run:
+
+[source,bash]
+----
+podman-compose up -d
+
+# View logs
+podman-compose logs -f
+
+# Stop
+podman-compose down
+----
+
+== Example 4: Rootless Podman
+
+[source,bash]
+----
+# Run as non-root user
+podman run \
+  --annotation=io.podman.verified-container=true \
+  nginx.ctp \
+  --name web -p 8080:80
+
+# Note: Audit log location for rootless
+# System-wide: /var/log/verified-container/audit.log
+# Rootless: ~/.local/share/containers/verified-container/audit.log
+----
+
+== Example 5: Conversion Layer
+
+Instead of hooks, convert .ctp to OCI format:
+
+[source,bash]
+----
+# Extract .ctp to OCI directory layout
+tar -xf nginx.ctp -C /tmp/nginx-oci
+
+# Load into Podman
+podman load -i /tmp/nginx-oci/oci-layout
+
+# Run the imported image
+podman run localhost/nginx:verified -p 8080:80
+----
+
+== Example 6: SystemD Integration
+
+Create `/etc/systemd/system/nginx-verified.service`:
+
+[source,systemd]
+----
+[Unit]
+Description=Nginx (Verified Container)
+After=network.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/podman pull nginx.ctp
+ExecStart=/usr/bin/podman run \
+  --annotation=io.podman.verified-container=true \
+  --annotation=io.podman.verified-container.mode=strict \
+  --rm --name nginx-verified \
+  -p 8080:80 \
+  nginx.ctp
+ExecStop=/usr/bin/podman stop nginx-verified
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+----
+
+Enable and start:
+
+[source,bash]
+----
+sudo systemctl daemon-reload
+sudo systemctl enable nginx-verified.service
+sudo systemctl start nginx-verified.service
+sudo systemctl status nginx-verified.service
+----
+
+== Example 7: Kubernetes/Podman
+
+Use `.ctp` bundles in Kubernetes YAML with Podman as runtime:
+
+[source,yaml]
+----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-verified
+  annotations:
+    io.podman.verified-container: "true"
+    io.podman.verified-container.mode: "strict"
+spec:
+  containers:
+  - name: web
+    image: nginx.ctp
+    ports:
+    - containerPort: 80
+----
+
+Deploy:
+
+[source,bash]
+----
+podman play kube nginx-pod.yaml
+----
+
+== Troubleshooting
+
+=== Hook not running
+
+[source,bash]
+----
+# Verify hook is registered
+podman info --debug | grep hooks
+
+# Expected output:
+# hooks: [/usr/share/containers/oci/hooks.d/verified-container.json]
+
+# Check hook script exists and is executable
+ls -la /usr/libexec/podman/verified-container-prestart
+----
+
+=== Test hook manually
+
+[source,bash]
+----
+# Create minimal OCI state JSON
+cat > /tmp/test-state.json <<'EOF'
+{
+  "annotations": {
+    "io.podman.verified-container": "true",
+    "io.podman.verified-container.mode": "strict"
+  },
+  "bundle": "/path/to/nginx.ctp"
+}
+EOF
+
+# Test hook
+cat /tmp/test-state.json | sudo /usr/libexec/podman/verified-container-prestart
+
+echo "Exit code: $?"
+----
+
+=== View hook logs
+
+[source,bash]
+----
+# Hook stderr goes to journal
+journalctl -u podman -f
+
+# Or check Podman logs
+podman logs <container-id>
+
+# Audit log
+sudo tail -f /var/log/verified-container/audit.log
+----
+
+== Reference
+
+* https://github.com/hyperpolymath/verified-container-spec/blob/main/spec/runtime-integration.adoc[Runtime Integration Specification]
+* https://docs.podman.io/en/latest/markdown/podman-run.1.html#annotation-key-value[Podman Annotations]
+* https://github.com/containers/common/blob/main/pkg/hooks/docs/oci-hooks.5.md[OCI Hooks Specification]

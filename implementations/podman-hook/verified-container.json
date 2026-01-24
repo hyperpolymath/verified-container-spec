@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "hook": {
+    "path": "/usr/libexec/podman/verified-container-prestart",
+    "args": ["verified-container-prestart"],
+    "env": [
+      "VERIFY_MODE=strict"
+    ]
+  },
+  "when": {
+    "annotations": {
+      "io.podman.verified-container": "true"
+    }
+  },
+  "stages": ["prestart"]
+}

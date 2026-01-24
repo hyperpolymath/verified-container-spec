@@ -1,0 +1,188 @@
+= nerdctl Integration Examples
+
+SPDX-License-Identifier: MIT OR Apache-2.0
+
+== Overview
+
+Examples for running `.ctp` bundles with nerdctl.
+
+== Prerequisites
+
+[source,bash]
+----
+# Install nerdctl and containerd
+# Fedora/RHEL
+sudo dnf install nerdctl containerd
+
+# Install verified-container plugin
+mkdir -p ~/.config/nerdctl/plugins
+cp ../../implementations/nerdctl-plugin/nerdctl-verified-container ~/.config/nerdctl/plugins/
+chmod +x ~/.config/nerdctl/plugins/nerdctl-verified-container
+----
+
+== Example 1: Basic Usage
+
+[source,bash]
+----
+# Run with strict verification (default)
+nerdctl run nginx.ctp --verify --name web -p 8080:80
+
+# Check it's running
+nerdctl ps
+
+# View logs
+nerdctl logs web
+
+# Stop container
+nerdctl stop web
+nerdctl rm web
+----
+
+== Example 2: Verification Modes
+
+[source,bash]
+----
+# Strict mode (default) - REJECT on any failure
+nerdctl run nginx.ctp --verify --verify-mode=strict
+
+# Permissive mode - WARN but continue
+nerdctl run nginx.ctp --verify --verify-mode=permissive
+
+# Audit mode - Log only, no blocking
+nerdctl run nginx.ctp --verify --verify-mode=audit
+----
+
+== Example 3: Compose File
+
+Create `docker-compose.yml`:
+
+[source,yaml]
+----
+version: "3"
+services:
+  web:
+    image: nginx.ctp
+    ports:
+      - "8080:80"
+    x-verification:
+      mode: strict
+      require:
+        - sbom
+        - slsa-provenance
+
+  app:
+    image: myapp.ctp
+    depends_on:
+      - web
+    x-verification:
+      mode: permissive
+----
+
+Run:
+
+[source,bash]
+----
+nerdctl compose up -d
+
+# View logs
+nerdctl compose logs -f
+
+# Stop
+nerdctl compose down
+----
+
+== Example 4: Unpacking and Inspection
+
+[source,bash]
+----
+# Unpack .ctp bundle to inspect contents
+nerdctl-verified-container unpack nginx.ctp --output /tmp/nginx-unpacked
+
+# Inspect attestations
+cat /tmp/nginx-unpacked/attestations/bundle.json | jq .
+
+# Inspect SBOM
+cat /tmp/nginx-unpacked/attestations/sbom.json | jq .
+
+# Verify without running
+nerdctl-verified-container verify nginx.ctp
+----
+
+== Example 5: Audit Log Inspection
+
+[source,bash]
+----
+# View audit log
+sudo cat /var/log/verified-container/audit.log
+
+# Filter by outcome
+sudo cat /var/log/verified-container/audit.log | jq 'select(.outcome == "REJECT")'
+
+# Count verifications by outcome
+sudo cat /var/log/verified-container/audit.log | jq -r '.outcome' | sort | uniq -c
+----
+
+== Example 6: Build, Pack, Run Workflow
+
+[source,bash]
+----
+# 1. Build image with standard tools
+docker build -t myapp:latest .
+
+# 2. Pack into .ctp bundle with Cerro Torre
+ct pack docker.io/library/myapp:latest -o myapp.ctp
+
+# 3. Verify the bundle
+ct verify myapp.ctp --policy strict.json
+
+# 4. Run with nerdctl
+nerdctl run myapp.ctp --verify --name myapp -p 3000:3000
+
+# 5. Check status
+nerdctl ps
+----
+
+== Troubleshooting
+
+=== Plugin not found
+
+[source,bash]
+----
+# Check plugin directory
+ls -la ~/.config/nerdctl/plugins/
+
+# Verify plugin is executable
+chmod +x ~/.config/nerdctl/plugins/nerdctl-verified-container
+
+# Test plugin directly
+nerdctl-verified-container --version
+----
+
+=== Verification failures
+
+[source,bash]
+----
+# Check audit log for details
+sudo tail -f /var/log/verified-container/audit.log
+
+# Run verification in verbose mode
+nerdctl run nginx.ctp --verify --log-level=debug
+----
+
+=== Bundle errors
+
+[source,bash]
+----
+# Unpack and inspect bundle structure
+nerdctl-verified-container unpack nginx.ctp --output /tmp/inspect
+
+# Check required files exist
+ls -la /tmp/inspect/
+# Expected: manifest.toml, oci-layout/, attestations/, signatures/
+----
+
+== Reference
+
+* https://github.com/hyperpolymath/verified-container-spec/blob/main/spec/runtime-integration.adoc[Runtime Integration Specification]
+* https://github.com/hyperpolymath/cerro-torre[Cerro Torre - .ctp bundle creation]
+* https://github.com/containerd/nerdctl[nerdctl documentation]

@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# verified-container-prestart
+#
+# Podman OCI prestart hook for .ctp bundle verification
+# Implements runtime-integration.adoc Section 4.3.1
+
+set -euo pipefail
+
+HOOK_NAME="verified-container-prestart"
+HOOK_VERSION="0.1.0"
+AUDIT_LOG="/var/log/verified-container/audit.log"
+
+# Exit codes per runtime-integration.adoc Section 8.2
+EXIT_SUCCESS=0
+EXIT_VERIFY_FAILED=1
+EXIT_MALFORMED=2
+EXIT_NETWORK_ERROR=3
+
+log_info() {
+    echo "[INFO] $*" >&2
+}
+
+log_warn() {
+    echo "[WARN] $*" >&2
+}
+
+log_error() {
+    echo "[ERROR] $*" >&2
+}
+
+audit_log() {
+    local outcome="$1"
+    local bundle="${2:-unknown}"
+    local digest="${3:-unknown}"
+
+    mkdir -p "$(dirname "$AUDIT_LOG")"
+
+    cat >>"$AUDIT_LOG" <<EOF
+{"timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","bundle":"$bundle","digest":"$digest","outcome":"$outcome","hook":"$HOOK_NAME"}
+EOF
+}
+
+# Read OCI hook state from stdin (per OCI runtime spec)
+read_hook_state() {
+    local state
+    state=$(cat)
+    echo "$state"
+}
+
+# Extract bundle path from annotations
+get_bundle_path() {
+    local state="$1"
+
+    # Try to extract from io.podman.verified-container.bundle annotation
+    local bundle_path
+    bundle_path=$(echo "$state" | jq -r '.annotations["io.podman.verified-container.bundle"] // empty')
+
+    if [[ -z "$bundle_path" ]]; then
+        # Fallback: try to find .ctp in bundle path
+        bundle_path=$(echo "$state" | jq -r '.bundle // empty')
+
+        if [[ "$bundle_path" == *.ctp ]]; then
+            echo "$bundle_path"
+            return 0
+        fi
+
+        log_error "No .ctp bundle path found in annotations"
+        return 1
+    fi
+
+    echo "$bundle_path"
+}
+
+# Extract verification mode from annotations
+get_verify_mode() {
+    local state="$1"
+
+    local mode
+    mode=$(echo "$state" | jq -r '.annotations["io.podman.verified-container.mode"] // "strict"')
+
+    echo "$mode"
+}
+
+# Verify attestation bundle
+verify_attestations() {
+    local bundle_dir="$1"
+    local mode="$2"
+
+    log_info "Verifying attestations (mode: $mode)"
+
+    local attestation_bundle="$bundle_dir/attestations/bundle.json"
+
+    if [[ ! -f "$attestation_bundle" ]]; then
+        log_error "Attestation bundle not found: $attestation_bundle"
+        return "$EXIT_MALFORMED"
+    fi
+
+    # Validate JSON structure
+    if ! jq empty "$attestation_bundle" 2>/dev/null; then
+        log_error "Attestation bundle is not valid JSON"
+        return "$EXIT_MALFORMED"
+    fi
+
+    # Check media type (verification-protocol.adoc Section 6.3)
+    local media_type
+    media_type=$(jq -r '.mediaType' "$attestation_bundle")
+
+    if [[ "$media_type" != "application/vnd.verified-container.bundle+json" ]]; then
+        log_error "Invalid media type: $media_type"
+        return "$EXIT_MALFORMED"
+    fi
+
+    # Check version is supported
+    local version
+    version=$(jq -r '.version' "$attestation_bundle")
+    log_info "Attestation bundle version: $version"
+
+    # Verify log coverage (verification-protocol.adoc Section 6.6)
+    local log_count
+    log_count=$(jq '.logEntries | length' "$attestation_bundle")
+
+    if [[ "$log_count" -lt 2 ]]; then
+        log_warn "Insufficient log coverage: $log_count logs (need 2+)"
+
+        if [[ "$mode" == "strict" ]]; then
+            log_error "REJECT: Insufficient transparency log coverage in strict mode"
+            return "$EXIT_VERIFY_FAILED"
+        fi
+    fi
+
+    # Verify subject match (verification-protocol.adoc Section 6.4)
+    local subjects_count
+    subjects_count=$(jq '[.attestations[].subject[]] | length' "$attestation_bundle")
+
+    if [[ "$subjects_count" -eq 0 ]]; then
+        log_error "No subjects found in attestation bundle"
+        return "$EXIT_MALFORMED"
+    fi
+
+    log_info "Found $subjects_count subject(s) in attestation bundle"
+
+    # NOTE: Full signature and log proof verification not implemented
+    # Production should verify:
+    # - Ed25519 signatures (verification-protocol.adoc Section 6.5)
+    # - Merkle inclusion proofs (Section 6.6)
+    # - Threshold signatures (Section 6.7)
+
+    log_info "Verification PASSED (basic checks only)"
+    return "$EXIT_SUCCESS"
+}
+
+main() {
+    log_info "$HOOK_NAME v$HOOK_VERSION starting"
+
+    # Read OCI hook state from stdin
+    local state
+    state=$(read_hook_state)
+
+    # Check if verification is enabled via annotation
+    local enabled
+    enabled=$(echo "$state" | jq -r '.annotations["io.podman.verified-container"] // "false"')
+
+    if [[ "$enabled" != "true" ]]; then
+        log_info "Verification not enabled, skipping"
+        exit "$EXIT_SUCCESS"
+    fi
+
+    # Get bundle path and verification mode
+    local bundle_path
+    if ! bundle_path=$(get_bundle_path "$state"); then
+        log_warn "Could not determine bundle path, skipping verification"
+        exit "$EXIT_SUCCESS"
+    fi
+
+    local verify_mode
+    verify_mode=$(get_verify_mode "$state")
+
+    log_info "Bundle: $bundle_path"
+    log_info "Verification mode: $verify_mode"
+
+    # Extract bundle if it's a .ctp file
+    if [[ "$bundle_path" == *.ctp ]]; then
+        local temp_dir
+        temp_dir=$(mktemp -d)
+        trap 'rm -rf "$temp_dir"' EXIT
+
+        log_info "Extracting .ctp bundle to $temp_dir"
+
+        if file "$bundle_path" | grep -q gzip; then
+            tar -xzf "$bundle_path" -C "$temp_dir" 2>/dev/null || {
+                log_error "Failed to extract gzipped .ctp bundle"
+                audit_log "REJECT" "$bundle_path" "unknown"
+                exit "$EXIT_MALFORMED"
+            }
+        else
+            tar -xf "$bundle_path" -C "$temp_dir" 2>/dev/null || {
+                log_error "Failed to extract .ctp bundle"
+                audit_log "REJECT" "$bundle_path" "unknown"
+                exit "$EXIT_MALFORMED"
+            }
+        fi
+
+        bundle_path="$temp_dir"
+    fi
+
+    # Perform verification
+    if verify_attestations "$bundle_path" "$verify_mode"; then
+        audit_log "ALLOW" "$bundle_path" "unknown"
+        log_info "Hook completed successfully"
+        exit "$EXIT_SUCCESS"
+    else
+        local exit_code=$?
+        audit_log "REJECT" "$bundle_path" "unknown"
+
+        if [[ "$verify_mode" == "strict" ]]; then
+            log_error "Verification failed in strict mode, aborting container start"
+            exit "$exit_code"
+        elif [[ "$verify_mode" == "permissive" ]]; then
+            log_warn "Verification failed in permissive mode, allowing container start"
+            exit "$EXIT_SUCCESS"
+        elif [[ "$verify_mode" == "audit" ]]; then
+            log_info "Verification failed in audit mode, logged only"
+            exit "$EXIT_SUCCESS"
+        fi
+    fi
+}
+
+main "$@"

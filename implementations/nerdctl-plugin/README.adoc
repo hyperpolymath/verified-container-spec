@@ -1,0 +1,113 @@
+= nerdctl-verified-container
+
+SPDX-License-Identifier: MIT OR Apache-2.0
+
+== Overview
+
+nerdctl plugin for running `.ctp` (Cerro Torre Package) bundles with verification.
+
+Implements https://github.com/hyperpolymath/verified-container-spec/blob/main/spec/runtime-integration.adoc[Runtime Integration Specification] Section 4.2.2.
+
+== Installation
+
+[source,bash]
+----
+# Copy plugin to nerdctl plugins directory
+mkdir -p ~/.config/nerdctl/plugins
+cp nerdctl-verified-container ~/.config/nerdctl/plugins/
+chmod +x ~/.config/nerdctl/plugins/nerdctl-verified-container
+
+# Verify installation
+nerdctl-verified-container --version
+----
+
+== Usage
+
+=== Run a .ctp bundle
+
+[source,bash]
+----
+# Strict verification (default)
+nerdctl run nginx.ctp --verify
+
+# Permissive mode
+nerdctl run nginx.ctp --verify --verify-mode=permissive
+
+# Audit mode
+nerdctl run nginx.ctp --verify --verify-mode=audit
+----
+
+=== Unpack a bundle
+
+[source,bash]
+----
+nerdctl-verified-container unpack nginx.ctp --output /tmp/nginx-oci
+----
+
+=== Verify without running
+
+[source,bash]
+----
+nerdctl-verified-container verify nginx.ctp
+----
+
+== Requirements
+
+* `bash` >= 4.0
+* `jq` - JSON processing
+* `tar` - Tarball extraction
+* `file` - File type detection
+* `toml` (optional) - TOML parsing for manifest
+
+Install requirements:
+
+[source,bash]
+----
+# Fedora/RHEL
+sudo dnf install jq file
+
+# Debian/Ubuntu
+sudo apt install jq file
+
+# Optional: toml CLI tool
+cargo install toml-cli
+----
+
+== Verification Process
+
+The plugin implements runtime-integration.adoc Section 6:
+
+1. **Parse .ctp bundle** - Extract OCI layout and attestations
+2. **Validate structure** - Check required files exist
+3. **Verify attestation bundle** - Parse and validate JSON
+4. **Check log coverage** - Require 2+ transparency logs (federated)
+5. **Record result** - Log to `/var/log/verified-container/audit.log`
+
+== Verification Modes
+
+* **strict** (default for `.ctp`): REJECT on any verification failure
+* **permissive** (dev/test): WARN on failure but continue
+* **audit**: Log verification but don't block execution
+
+== Exit Codes
+
+Per runtime-integration.adoc Section 8.1:
+
+* `0`: Verification passed
+* `1`: Verification failed (REJECT)
+* `2`: Bundle malformed
+* `3`: Network error
+
+== Production Notes
+
+This reference implementation provides basic verification. Production deployments should implement:
+
+1. **Full cryptographic verification** - Ed25519 signature checks
+2. **Trust store integration** - Load and validate signing keys
+3. **Merkle proof verification** - Verify transparency log inclusion
+4. **Threshold signatures** - k-of-n signature validation
+5. **Cache management** - Cache verification results (1 hour TTL)
+
+== License
+
+Dual-licensed under MIT OR Apache-2.0.

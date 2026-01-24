@@ -1,0 +1,27 @@
+= subject-mismatch
+
+== Description
+
+Attestation subject digest doesn't match the manifest's `image_digest`.
+
+This simulates a scenario where the attestation was created for a different image, indicating potential tampering or configuration error.
+
+== Expected Behavior
+
+* **Strict mode**: REJECT with SUBJECT_MISMATCH (exit 1)
+* **Permissive mode**: REJECT with SUBJECT_MISMATCH (exit 1)
+* **Audit mode**: REJECT with SUBJECT_MISMATCH (exit 1)
+
+**Note**: Subject mismatch MUST always reject, even in permissive mode, as it indicates the attestation is for the wrong image.
+
+== Validates
+
+* Subject verification (verification-protocol.adoc Section 6.4)
+* Digest matching between manifest and attestation
+* Critical error that bypasses permissive mode
+
+== Reference
+
+See verification-protocol.adoc Section 6.4:
+
+> If any mismatch: REJECT with `SUBJECT_MISMATCH`

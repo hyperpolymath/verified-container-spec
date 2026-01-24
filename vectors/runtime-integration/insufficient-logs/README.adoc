@@ -1,0 +1,23 @@
+= insufficient-logs
+
+== Description
+
+Bundle with only 1 transparency log entry. The verified-container-spec requires 2+ logs for federated trust.
+
+== Expected Behavior
+
+* **Strict mode**: REJECT with INSUFFICIENT_LOG_COVERAGE (exit 1)
+* **Permissive mode**: WARN but continue (exit 0)
+* **Audit mode**: LOG only (exit 0)
+
+== Validates
+
+* Log coverage enforcement (verification-protocol.adoc Section 6.6)
+* Federated transparency requirement (2+ logs)
+* Verification mode handling (runtime-integration.adoc Section 6.3)
+
+== Reference
+
+See verification-protocol.adoc Section 6.6:
+
+> If fewer than 2 distinct logs: REJECT with `INSUFFICIENT_LOG_COVERAGE`

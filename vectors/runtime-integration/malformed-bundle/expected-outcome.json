@@ -1,0 +1,11 @@
+{
+  "outcome": "REJECT",
+  "exitCode": 2,
+  "errorCode": "MALFORMED_BUNDLE",
+  "modes": {
+    "strict": "REJECT",
+    "permissive": "REJECT",
+    "audit": "REJECT"
+  },
+  "description": "Invalid tarball structure - not a valid .ctp bundle"
+}

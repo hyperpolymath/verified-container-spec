@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Test vector: valid .ctp bundle
+
+name = "nginx"
+version = "1.26"
+image_digest = "sha256:abc123def456789abcdef0123456789abcdef0123456789abcdef0123456789ab"
+
+[metadata]
+build_timestamp = "2026-01-24T12:00:00Z"
+builder = "cerro-torre@0.1.0"

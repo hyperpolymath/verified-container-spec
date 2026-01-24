@@ -1,0 +1,11 @@
+{
+  "outcome": "ALLOW",
+  "exitCode": 0,
+  "errorCode": null,
+  "modes": {
+    "strict": "ALLOW",
+    "permissive": "ALLOW",
+    "audit": "ALLOW"
+  },
+  "description": "Valid .ctp bundle with complete attestations and 2+ transparency log entries"
+}

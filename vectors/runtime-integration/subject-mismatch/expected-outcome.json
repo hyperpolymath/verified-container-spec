@@ -1,0 +1,11 @@
+{
+  "outcome": "REJECT",
+  "exitCode": 1,
+  "errorCode": "SUBJECT_MISMATCH",
+  "modes": {
+    "strict": "REJECT",
+    "permissive": "REJECT",
+    "audit": "REJECT"
+  },
+  "description": "Attestation subject digest doesn't match manifest image_digest"
+}

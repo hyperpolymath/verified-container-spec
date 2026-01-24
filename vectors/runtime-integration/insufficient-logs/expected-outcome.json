@@ -1,0 +1,11 @@
+{
+  "outcome": "REJECT",
+  "exitCode": 1,
+  "errorCode": "INSUFFICIENT_LOG_COVERAGE",
+  "modes": {
+    "strict": "REJECT",
+    "permissive": "WARN",
+    "audit": "LOG"
+  },
+  "description": "Bundle with only 1 transparency log entry (requires 2+ for federation)"
+}

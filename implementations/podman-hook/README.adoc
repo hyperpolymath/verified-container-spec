@@ -1,0 +1,226 @@
+= verified-container-prestart
+
+SPDX-License-Identifier: MIT OR Apache-2.0
+
+== Overview
+
+Podman OCI prestart hook for verifying `.ctp` (Cerro Torre Package) bundles.
+
+Implements https://github.com/hyperpolymath/verified-container-spec/blob/main/spec/runtime-integration.adoc[Runtime Integration Specification] Section 4.3.1.
+
+== Installation
+
+[source,bash]
+----
+# Install hook script
+sudo cp verified-container-prestart /usr/libexec/podman/
+sudo chmod +x /usr/libexec/podman/verified-container-prestart
+
+# Register hook configuration
+sudo mkdir -p /usr/share/containers/oci/hooks.d
+sudo cp verified-container.json /usr/share/containers/oci/hooks.d/
+
+# Verify installation
+podman info --debug | grep hooks
+----
+
+== Usage
+
+=== Basic Usage
+
+[source,bash]
+----
+# Run with verification (auto-detects .ctp bundles)
+podman run --annotation=io.podman.verified-container=true nginx.ctp
+
+# Specify verification mode
+podman run \
+  --annotation=io.podman.verified-container=true \
+  --annotation=io.podman.verified-container.mode=strict \
+  nginx.ctp
+----
+
+=== Verification Modes
+
+Per runtime-integration.adoc Section 6.3:
+
+[source,bash]
+----
+# Strict mode (default) - REJECT on any failure
+podman run --annotation=io.podman.verified-container=true nginx.ctp
+
+# Permissive mode - WARN but continue
+podman run \
+  --annotation=io.podman.verified-container=true \
+  --annotation=io.podman.verified-container.mode=permissive \
+  nginx.ctp
+
+# Audit mode - Log only, don't block
+podman run \
+  --annotation=io.podman.verified-container=true \
+  --annotation=io.podman.verified-container.mode=audit \
+  nginx.ctp
+----
+
+=== Podman Compose
+
+Create a `podman-compose.yml`:
+
+[source,yaml]
+----
+version: "3"
+services:
+  web:
+    image: nginx.ctp
+    annotations:
+      io.podman.verified-container: "true"
+      io.podman.verified-container.mode: "strict"
+    ports:
+      - "8080:80"
+----
+
+Run:
+
+[source,bash]
+----
+podman-compose up
+----
+
+== Hook Behavior
+
+The hook runs before container start (`prestart` stage):
+
+1. **Check annotations** - Only run if `io.podman.verified-container=true`
+2. **Extract .ctp bundle** - Unpack to temporary directory
+3. **Validate structure** - Check required files exist
+4. **Verify attestations** - Parse and validate attestation bundle
+5. **Check log coverage** - Require 2+ transparency logs (federated)
+6. **Record result** - Log to `/var/log/verified-container/audit.log`
+7. **Exit decision**:
+   - Exit 0 (ALLOW) if verification passes
+   - Exit non-zero (REJECT) if verification fails in strict mode
+   - Exit 0 with warning if permissive/audit mode
+
+== Exit Codes
+
+Per runtime-integration.adoc Section 8.2:
+
+* `0`: Verification passed (or permissive/audit mode)
+* `1`: Verification failed (REJECT)
+* `2`: Bundle malformed
+* `3`: Network error
+
+If the hook exits non-zero, Podman aborts container creation.
+
+== Annotations
+
+[cols="2,3,1"]
+|===
+|Annotation |Description |Required
+
+|`io.podman.verified-container`
+|Enable verification (`true`/`false`)
+|Yes
+
+|`io.podman.verified-container.mode`
+|Verification mode (`strict`/`permissive`/`audit`)
+|No (default: `strict`)
+
+|`io.podman.verified-container.bundle`
+|Explicit path to .ctp bundle
+|No (auto-detected)
+|===
+
+== Requirements
+
+* `bash` >= 4.0
+* `jq` - JSON processing
+* `tar` - Tarball extraction
+* `file` - File type detection
+
+Install:
+
+[source,bash]
+----
+# Fedora/RHEL
+sudo dnf install jq file
+
+# Debian/Ubuntu
+sudo apt install jq file
+----
+
+== Audit Logs
+
+All verification decisions are logged to:
+
+[source,text]
+----
+/var/log/verified-container/audit.log
+----
+
+Log format (JSONL):
+
+[source,json]
+----
+{
+  "timestamp": "2026-01-24T12:34:56Z",
+  "bundle": "/path/to/nginx.ctp",
+  "digest": "sha256:abc123",
+  "outcome": "ALLOW",
+  "hook": "verified-container-prestart"
+}
+----
+
+== Production Notes
+
+This reference implementation provides basic verification. Production deployments should add:
+
+1. **Full signature verification** - Ed25519 with trust store
+2. **Merkle proof validation** - Verify transparency log inclusion
+3. **Threshold signatures** - k-of-n signature checks
+4. **Cache management** - Cache verification results (1 hour TTL)
+5. **Offline mode** - Support pre-loaded attestations
+
+== Troubleshooting
+
+=== Hook not running
+
+Check hook is registered:
+
+[source,bash]
+----
+podman info --debug | grep hooks
+----
+
+Expected output should include:
+
+[source,text]
+----
+hooks: [/usr/share/containers/oci/hooks.d/verified-container.json]
+----
+
+=== View hook logs
+
+[source,bash]
+----
+# Podman logs (includes hook stderr)
+podman logs <container-id>
+
+# Audit log
+sudo cat /var/log/verified-container/audit.log
+----
+
+=== Test hook manually
+
+[source,bash]
+----
+# Create test state JSON
+echo '{"annotations":{"io.podman.verified-container":"true"}}' | \
+  /usr/libexec/podman/verified-container-prestart
+
+echo "Exit code: $?"
+----
+
+== License
+
+Dual-licensed under MIT OR Apache-2.0.

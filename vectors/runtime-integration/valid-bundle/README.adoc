@@ -1,0 +1,25 @@
+= valid-bundle
+
+== Description
+
+Complete, valid `.ctp` bundle with all required components.
+
+== Structure
+
+* `manifest.toml` - Valid package manifest
+* `attestations/bundle.json` - Valid attestation bundle with 2 log entries
+* `oci-layout/` - OCI Image Layout (minimal structure)
+* `signatures/` - Placeholder signatures
+
+== Expected Behavior
+
+* **Strict mode**: ALLOW (exit 0)
+* **Permissive mode**: ALLOW (exit 0)
+* **Audit mode**: ALLOW (exit 0), logged
+
+== Validates
+
+* Bundle parsing (runtime-integration.adoc Section 5)
+* Attestation bundle format
+* Log coverage requirement (2+ logs)
+* Subject digest matching

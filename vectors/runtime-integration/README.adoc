@@ -1,0 +1,140 @@
+= Runtime Integration Test Vectors
+
+SPDX-License-Identifier: MIT OR Apache-2.0
+
+== Overview
+
+Conformance test vectors for runtime integration implementations.
+
+All implementations (containerd shim, nerdctl plugin, Podman hook) MUST pass these tests.
+
+== Test Vectors
+
+[cols="1,2,2,1"]
+|===
+|Vector |Description |Expected Outcome |Spec Reference
+
+|`valid-bundle/`
+|Complete, valid .ctp bundle with all required components
+|ALLOW in strict mode
+|runtime-integration.adoc Section 6.1
+
+|`malformed-bundle/`
+|Invalid tarball structure
+|REJECT with EXIT_MALFORMED (code 2)
+|Section 8.1
+
+|`missing-attestations/`
+|Bundle without attestations/ directory
+|REJECT with MISSING_ATTESTATION
+|verification-protocol.adoc Section 6.2
+
+|`invalid-media-type/`
+|Attestation bundle with wrong mediaType
+|REJECT with MALFORMED_BUNDLE
+|Section 6.3
+
+|`insufficient-logs/`
+|Bundle with only 1 transparency log entry (need 2+)
+|REJECT in strict, WARN in permissive
+|Section 6.6
+
+|`subject-mismatch/`
+|Attestation subject doesn't match manifest digest
+|REJECT with SUBJECT_MISMATCH
+|Section 6.4
+
+|`permissive-mode/`
+|Invalid bundle tested in permissive mode
+|WARN but continue (EXIT_SUCCESS)
+|runtime-integration.adoc Section 6.3
+
+|`audit-mode/`
+|Invalid bundle tested in audit mode
+|Log only, no rejection
+|Section 6.3
+|===
+
+== Running Tests
+
+[source,bash]
+----
+# Test containerd shim
+./test-shim.sh
+
+# Test nerdctl plugin
+./test-plugin.sh
+
+# Test Podman hook
+./test-hook.sh
+
+# Run all tests
+./test-all.sh
+----
+
+== Expected Results
+
+All implementations MUST:
+
+1. **Parse valid bundles** - Successfully extract OCI layout and attestations
+2. **Reject malformed bundles** - Exit with code 2 for malformed data
+3. **Reject missing attestations** - Exit with code 1 when attestations absent
+4. **Enforce log coverage** - Require 2+ transparency logs in strict mode
+5. **Verify subject match** - Reject when attestation subject != manifest digest
+6. **Respect verification modes** - Behave correctly in strict/permissive/audit
+7. **Log all decisions** - Record to `/var/log/verified-container/audit.log`
+
+== Test Vector Format
+
+Each test vector directory contains:
+
+[source,text]
+----
+<vector-name>/
+├── bundle.ctp              # The test bundle (or invalid data)
+├── manifest.toml           # Expected manifest (if valid)
+├── expected-outcome.json   # Expected verification result
+└── README.adoc             # Description of test case
+----
+
+== Creating New Test Vectors
+
+To add a new test vector:
+
+1. Create directory: `mkdir vectors/runtime-integration/new-vector`
+2. Add test bundle: Create or copy `.ctp` file
+3. Define expected outcome: Create `expected-outcome.json`
+4. Document test: Add `README.adoc` explaining the test
+
+Expected outcome format:
+
+[source,json]
+----
+{
+  "outcome": "ALLOW" | "REJECT",
+  "exitCode": 0 | 1 | 2 | 3,
+  "errorCode": "MISSING_ATTESTATION" | "MALFORMED_BUNDLE" | ...,
+  "modes": {
+    "strict": "REJECT",
+    "permissive": "WARN",
+    "audit": "LOG"
+  }
+}
+----
+
+== Conformance Checklist
+
+To claim conformance with runtime-integration.adoc, implementations MUST:
+
+- [ ] Pass all test vectors in `valid-bundle/`
+- [ ] Correctly reject all invalid bundles
+- [ ] Support strict/permissive/audit modes
+- [ ] Exit with correct exit codes (Section 8.1/8.2)
+- [ ] Log to `/var/log/verified-container/audit.log`
+- [ ] Handle network errors gracefully (EXIT_NETWORK_ERROR = 3)
+- [ ] Cache verification results (SHOULD requirement)
+- [ ] Support offline mode (SHOULD requirement)
+
+== License
+
+Test vectors are dual-licensed under MIT OR Apache-2.0.

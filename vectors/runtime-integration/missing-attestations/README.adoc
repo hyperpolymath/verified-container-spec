@@ -1,0 +1,25 @@
+= missing-attestations
+
+== Description
+
+Valid .ctp bundle structure but missing the `attestations/` directory entirely.
+
+== Expected Behavior
+
+* **Strict mode**: REJECT with MISSING_ATTESTATION (exit 1)
+* **Permissive mode**: WARN but continue (exit 0)
+* **Audit mode**: LOG only (exit 0)
+
+== Validates
+
+* Attestation requirement enforcement (verification-protocol.adoc Section 6.2)
+* Verification mode handling
+* Graceful degradation in permissive mode
+
+== Reference
+
+See verification-protocol.adoc Section 6.2:
+
+> If no bundle found:
+>   - Strict mode: REJECT with `MISSING_ATTESTATION`
+>   - Permissive mode: WARN and continue without verification

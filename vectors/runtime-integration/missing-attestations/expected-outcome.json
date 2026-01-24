@@ -1,0 +1,11 @@
+{
+  "outcome": "REJECT",
+  "exitCode": 1,
+  "errorCode": "MISSING_ATTESTATION",
+  "modes": {
+    "strict": "REJECT",
+    "permissive": "WARN",
+    "audit": "LOG"
+  },
+  "description": "Bundle without attestations/ directory"
+}

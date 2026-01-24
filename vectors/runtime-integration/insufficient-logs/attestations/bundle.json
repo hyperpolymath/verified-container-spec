@@ -1,0 +1,22 @@
+{
+  "mediaType": "application/vnd.verified-container.bundle+json",
+  "version": "0.1.0",
+  "attestations": [
+    {
+      "subject": [
+        {
+          "digest": {
+            "sha256": "abc123def456789abcdef0123456789abcdef0123456789abcdef0123456789ab"
+          }
+        }
+      ],
+      "predicateType": "https://slsa.dev/provenance/v1"
+    }
+  ],
+  "logEntries": [
+    {
+      "logId": "transparency-log-1",
+      "signedEntryTimestamp": "MEUCIQDxyz..."
+    }
+  ]
+}

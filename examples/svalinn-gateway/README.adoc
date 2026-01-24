@@ -1,0 +1,292 @@
+= Svalinn Gateway Integration Example
+
+SPDX-License-Identifier: MIT OR Apache-2.0
+
+== Overview
+
+Examples for using Svalinn as a centralized verification gateway.
+
+This pattern allows existing runtimes (nerdctl, Podman) to delegate verification to Svalinn, which enforces policies and forwards verified requests to Vörðr.
+
+== Architecture
+
+```
+┌─────────────┐                 ┌─────────────┐                 ┌─────────────┐
+│   nerdctl   │  HTTP/JSON-RPC  │   Svalinn   │  MCP/JSON-RPC   │    Vörðr    │
+│   or        │ ──────────────► │   Gateway   │ ──────────────► │  Container  │
+│   Podman    │                 │             │                 │   Engine    │
+└─────────────┘                 └─────────────┘                 └─────────────┘
+```
+
+== Prerequisites
+
+[source,bash]
+----
+# Install Svalinn gateway
+cd ~/Documents/hyperpolymath-repos/svalinn
+just build
+
+# Install Vörðr container engine
+cd ~/Documents/hyperpolymath-repos/vordr
+mix deps.get
+mix compile
+cd src/rust && cargo build --release
+
+# Start Vörðr MCP server
+cd ~/Documents/hyperpolymath-repos/vordr/src/elixir
+MIX_ENV=prod mix run --no-halt &
+
+# Start Svalinn gateway
+cd ~/Documents/hyperpolymath-repos/svalinn
+VORDR_ENDPOINT=http://localhost:8080 just serve &
+----
+
+== Example 1: Direct API Usage
+
+[source,bash]
+----
+# Create a request to run a container
+curl -X POST http://localhost:8000/v1/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bundle": "nginx.ctp",
+    "name": "web",
+    "ports": {"80": "8080"},
+    "verify": true,
+    "verifyMode": "strict"
+  }'
+----
+
+== Example 2: Runtime Integration
+
+Configure nerdctl to use Svalinn gateway:
+
+Create `~/.config/nerdctl/svalinn-runtime.sh`:
+
+[source,bash]
+----
+#!/bin/bash
+# Svalinn runtime wrapper for nerdctl
+
+BUNDLE="$1"
+shift
+ARGS="$@"
+
+# Forward to Svalinn gateway
+curl -X POST http://localhost:8000/v1/run \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"bundle\": \"$BUNDLE\",
+    \"args\": $(echo "$ARGS" | jq -R 'split(" ")')
+  }"
+----
+
+Usage:
+
+[source,bash]
+----
+nerdctl run --runtime=svalinn nginx.ctp
+----
+
+== Example 3: Policy Enforcement
+
+Configure Svalinn with custom policies (`svalinn.policy.json`):
+
+[source,json]
+----
+{
+  "version": "1.0",
+  "rules": [
+    {
+      "operation": "run",
+      "require": {
+        "attestations": ["sbom", "slsa-provenance"],
+        "minLogCoverage": 3,
+        "thresholdSignatures": {
+          "group": "release-signers",
+          "k": 2,
+          "n": 3
+        }
+      }
+    },
+    {
+      "operation": "run",
+      "deny": {
+        "images": ["*/untrusted/*"],
+        "registries": ["docker.io/random/*"]
+      }
+    }
+  ]
+}
+----
+
+Start Svalinn with policy:
+
+[source,bash]
+----
+SVALINN_POLICY=svalinn.policy.json just serve
+----
+
+== Example 4: Multi-Container Orchestration
+
+Use `svalinn-compose.yaml`:
+
+[source,yaml]
+----
+version: "1.0"
+services:
+  web:
+    image: nginx.ctp
+    ports:
+      - "8080:80"
+    x-svalinn:
+      policy: strict
+      verify: true
+      require:
+        - sbom
+        - slsa-provenance
+
+  app:
+    image: myapp.ctp
+    depends_on:
+      - web
+    x-svalinn:
+      policy: permissive
+      verify: true
+
+  db:
+    image: postgres.ctp
+    environment:
+      POSTGRES_PASSWORD: secret
+    x-svalinn:
+      policy: strict
+      verify: true
+      require:
+        - sbom
+        - vulnerability-scan
+
+x-svalinn:
+  gateway: "http://localhost:8000"
+  defaultPolicy: strict
+----
+
+Run:
+
+[source,bash]
+----
+svalinn-compose up -d
+
+# View logs
+svalinn-compose logs -f
+
+# Stop
+svalinn-compose down
+----
+
+== Example 5: Authentication
+
+Svalinn supports OAuth2/JWT authentication:
+
+[source,bash]
+----
+# Obtain JWT token
+TOKEN=$(curl -X POST http://auth.example.com/oauth/token \
+  -d "client_id=myapp&client_secret=secret&grant_type=client_credentials" \
+  | jq -r '.access_token')
+
+# Use token with Svalinn
+curl -X POST http://localhost:8000/v1/run \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bundle": "nginx.ctp",
+    "name": "web"
+  }'
+----
+
+== Example 6: Health Checking
+
+[source,bash]
+----
+# Check Svalinn health
+curl http://localhost:8000/healthz
+
+# Expected response:
+# {
+#   "status": "healthy",
+#   "vordr": "connected",
+#   "uptime": 3600
+# }
+----
+
+== Example 7: Audit Trail
+
+Svalinn logs all verification decisions:
+
+[source,bash]
+----
+# View Svalinn audit log
+curl http://localhost:8000/v1/audit | jq .
+
+# Filter by outcome
+curl http://localhost:8000/v1/audit?outcome=REJECT | jq .
+
+# Filter by time range
+curl "http://localhost:8000/v1/audit?since=2026-01-24T00:00:00Z" | jq .
+----
+
+== Monitoring
+
+=== Prometheus Metrics
+
+Svalinn exposes Prometheus metrics:
+
+[source,bash]
+----
+curl http://localhost:8000/metrics
+
+# Example metrics:
+# svalinn_verifications_total{outcome="ALLOW"} 42
+# svalinn_verifications_total{outcome="REJECT"} 3
+# svalinn_verification_duration_seconds_bucket{le="1.0"} 38
+----
+
+=== Grafana Dashboard
+
+Import the Svalinn dashboard from `svalinn/monitoring/grafana-dashboard.json`.
+
+== Security
+
+=== TLS Configuration
+
+Enable TLS for production:
+
+[source,bash]
+----
+export SVALINN_TLS_CERT=/path/to/cert.pem
+export SVALINN_TLS_KEY=/path/to/key.pem
+export SVALINN_PORT=8443
+
+just serve
+----
+
+=== API Key Authentication
+
+Use API keys instead of JWT:
+
+[source,bash]
+----
+# Generate API key
+svalinn keygen --output api-key.txt
+
+# Use in requests
+curl -X POST http://localhost:8000/v1/run \
+  -H "X-API-Key: $(cat api-key.txt)" \
+  -d '{...}'
+----
+
+== Reference
+
+* https://github.com/hyperpolymath/verified-container-spec/blob/main/spec/runtime-integration.adoc[Runtime Integration Specification] (Section 4.4)
+* https://github.com/hyperpolymath/svalinn[Svalinn Documentation]
+* https://github.com/hyperpolymath/vordr[Vörðr Documentation]

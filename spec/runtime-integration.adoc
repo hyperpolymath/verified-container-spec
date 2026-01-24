@@ -1,0 +1,627 @@
+= Runtime Integration
+:spec-version: 0.1.0
+:status: draft
+
+== 1. Scope
+
+This document defines how container runtimes can integrate with the Verified Container Specification to run `.ctp` (Cerro Torre Package) bundles. It covers:
+
+* Runtime integration architectures
+* Plugin and shim specifications for nerdctl/containerd and Podman
+* Verification enforcement requirements
+* Bundle unpacking and execution flow
+* CLI integration patterns
+
+This document does NOT cover:
+
+* `.ctp` bundle format internals (see Cerro Torre documentation)
+* Verification protocol details (see link:verification-protocol.adoc[Verification Protocol])
+* Attestation bundle format (see link:attestation-bundle.adoc[Attestation Bundle Format])
+
+== 2. Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in https://datatracker.ietf.org/doc/html/rfc2119[RFC 2119].
+
+Runtime:: Container execution environment (e.g., containerd, podman, Vörðr)
+CTP Bundle:: Cerro Torre Package - cryptographically signed container image bundle (`.ctp` file)
+Shim:: Process that manages container lifecycle and enforces verification
+Plugin:: Extension to existing runtime that adds verification capabilities
+Verification Gateway:: Service that validates bundles before execution (e.g., Svalinn)
+
+See link:../docs/glossary.adoc[Glossary] for additional term definitions.
+
+== 3. Overview
+
+The Verified Container Specification enables multiple runtime choices while enforcing cryptographic verification:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     RUNTIME INTEGRATION OPTIONS                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  User Command:                                                           │
+│    $ nerdctl run nginx.ctp --verify                                      │
+│    $ podman run nginx.ctp --verify                                       │
+│    $ vordr run nginx.ctp                                                 │
+│                                                                          │
+│  ┌────────────────┬────────────────┬────────────────┐                   │
+│  │   nerdctl      │    Podman      │    Vörðr       │                   │
+│  │  + Plugin      │   + Plugin     │   (Native)     │                   │
+│  └───────┬────────┴────────┬───────┴────────┬───────┘                   │
+│          │                 │                │                            │
+│          ▼                 ▼                ▼                            │
+│  ┌──────────────────────────────────────────────────┐                   │
+│  │         VERIFICATION PROTOCOL (RFC 2119)         │                   │
+│  │  • Parse .ctp bundle                             │                   │
+│  │  • Verify attestations                           │                   │
+│  │  • Check signatures                              │                   │
+│  │  • Validate log proofs                           │                   │
+│  │  • Enforce threshold requirements                │                   │
+│  └──────────────────┬───────────────────────────────┘                   │
+│                     │                                                    │
+│                     ▼                                                    │
+│          ┌─────────────────────┐                                         │
+│          │  ALLOW → Execute    │                                         │
+│          │  REJECT → Abort     │                                         │
+│          └─────────────────────┘                                         │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+=== 3.1 Design Goals
+
+* **Runtime Choice**: Users select their preferred runtime
+* **Uniform Verification**: All runtimes enforce the same verification protocol
+* **Backward Compatibility**: Existing OCI images continue to work
+* **Opt-In Security**: `.ctp` bundles provide enhanced guarantees when available
+
+== 4. Integration Architectures
+
+=== 4.1 Vörðr (Reference Implementation)
+
+Vörðr natively implements the verified-container-spec protocol:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         VÖRÐR                               │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  Rust CLI (vordr)                                     │  │
+│  └─────────────────┬─────────────────────────────────────┘  │
+│                    │                                         │
+│                    ▼                                         │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  Elixir Orchestrator (GenStateMachine)                │  │
+│  │  • Container lifecycle                                │  │
+│  │  • Reversibility journal                              │  │
+│  └─────────────────┬─────────────────────────────────────┘  │
+│                    │                                         │
+│                    ▼                                         │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  Ada/SPARK Trust Engine                               │  │
+│  │  • .ctp bundle parsing                                │  │
+│  │  • Cryptographic verification                         │  │
+│  │  • Formal proofs (SPARK)                              │  │
+│  └─────────────────┬─────────────────────────────────────┘  │
+│                    │                                         │
+│                    ▼                                         │
+│           ┌────────────────┐                                 │
+│           │ OCI Runtime    │                                 │
+│           │ (runc/crun)    │                                 │
+│           └────────────────┘                                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Usage:
+```bash
+vordr run nginx.ctp --name web
+vordr ps
+vordr stop web
+```
+
+Verification is **always enforced** in Vörðr - no opt-out.
+
+=== 4.2 nerdctl/containerd Integration
+
+Two integration options for nerdctl/containerd:
+
+==== 4.2.1 Option A: Containerd Shim
+
+A custom containerd shim intercepts `.ctp` execution:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  User: nerdctl run nginx.ctp --verify                       │
+│         │                                                    │
+│         ▼                                                    │
+│  ┌──────────────────┐                                        │
+│  │    nerdctl       │                                        │
+│  └────────┬─────────┘                                        │
+│           │ detects .ctp extension                           │
+│           ▼                                                  │
+│  ┌──────────────────┐                                        │
+│  │   containerd     │                                        │
+│  │   (runtime=      │                                        │
+│  │    verified-     │                                        │
+│  │    container)    │                                        │
+│  └────────┬─────────┘                                        │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────────────────────────────────┐           │
+│  │  containerd-shim-verified-container-v1       │           │
+│  │  ┌────────────────────────────────────────┐  │           │
+│  │  │ 1. Unpack .ctp bundle                  │  │           │
+│  │  │ 2. Extract OCI image + attestations    │  │           │
+│  │  │ 3. Verify via verification-protocol    │  │           │
+│  │  │ 4. If ALLOW → delegate to runc/crun    │  │           │
+│  │  │ 5. If REJECT → abort with error        │  │           │
+│  │  └────────────────────────────────────────┘  │           │
+│  └────────┬─────────────────────────────────────┘           │
+│           │ ALLOW                                            │
+│           ▼                                                  │
+│  ┌──────────────────┐                                        │
+│  │  runc/crun       │                                        │
+│  │  (executes OCI)  │                                        │
+│  └──────────────────┘                                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Installation:**
+
+```bash
+# Install shim
+sudo cp containerd-shim-verified-container-v1 /usr/local/bin/
+
+# Configure containerd (/etc/containerd/config.toml)
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.verified-container]
+    runtime_type = "io.containerd.verified-container.v1"
+```
+
+**Usage:**
+
+```bash
+# Automatic detection (if .ctp extension registered)
+nerdctl run nginx.ctp --verify
+
+# Explicit runtime selection
+nerdctl run --runtime=verified-container nginx.ctp
+```
+
+==== 4.2.2 Option B: nerdctl Plugin
+
+A nerdctl plugin pre-processes `.ctp` bundles:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  User: nerdctl run nginx.ctp --verify                       │
+│         │                                                    │
+│         ▼                                                    │
+│  ┌──────────────────────────────────────────────┐           │
+│  │  nerdctl-plugin-verified-container           │           │
+│  │  ┌────────────────────────────────────────┐  │           │
+│  │  │ 1. Intercept .ctp argument             │  │           │
+│  │  │ 2. Unpack to temp OCI layout           │  │           │
+│  │  │ 3. Verify attestations                 │  │           │
+│  │  │ 4. If ALLOW → rewrite command to use   │  │           │
+│  │  │    unpacked OCI image                  │  │           │
+│  │  │ 5. If REJECT → exit with error         │  │           │
+│  │  └────────────────────────────────────────┘  │           │
+│  └────────┬─────────────────────────────────────┘           │
+│           │ rewrites to: nerdctl run <oci-digest>           │
+│           ▼                                                  │
+│  ┌──────────────────┐                                        │
+│  │   containerd     │                                        │
+│  │   (standard)     │                                        │
+│  └────────┬─────────┘                                        │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                        │
+│  │  runc/crun       │                                        │
+│  └──────────────────┘                                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Installation:**
+
+```bash
+# Install plugin
+mkdir -p ~/.config/nerdctl/plugins
+cp nerdctl-verified-container ~/.config/nerdctl/plugins/
+
+# Plugin auto-detected by nerdctl
+```
+
+**Usage:**
+
+```bash
+nerdctl run nginx.ctp --verify
+```
+
+=== 4.3 Podman Integration
+
+Podman integration via hooks or plugin:
+
+==== 4.3.1 Option A: Podman Hooks
+
+Use OCI hooks to verify before container start:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  User: podman run nginx.ctp --verify                        │
+│         │                                                    │
+│         ▼                                                    │
+│  ┌──────────────────────────────────────────────┐           │
+│  │  podman (detects .ctp)                       │           │
+│  │  ┌────────────────────────────────────────┐  │           │
+│  │  │ 1. Unpack .ctp to OCI layout           │  │           │
+│  │  │ 2. Import to podman storage            │  │           │
+│  │  │ 3. Attach prestart hook                │  │           │
+│  │  └────────────────────────────────────────┘  │           │
+│  └────────┬─────────────────────────────────────┘           │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────────────────────────────────┐           │
+│  │  OCI Hook: verified-container-prestart       │           │
+│  │  (/usr/share/containers/oci/hooks.d/)        │           │
+│  │  ┌────────────────────────────────────────┐  │           │
+│  │  │ 1. Verify attestations from .ctp       │  │           │
+│  │  │ 2. Check signatures                    │  │           │
+│  │  │ 3. Validate log proofs                 │  │           │
+│  │  │ 4. If ALLOW → return 0                 │  │           │
+│  │  │ 5. If REJECT → exit non-zero           │  │           │
+│  │  └────────────────────────────────────────┘  │           │
+│  └────────┬─────────────────────────────────────┘           │
+│           │ exit 0 (ALLOW)                                   │
+│           ▼                                                  │
+│  ┌──────────────────┐                                        │
+│  │  crun/runc       │                                        │
+│  └──────────────────┘                                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Installation:**
+
+```bash
+# Install hook
+sudo cp verified-container-prestart /usr/libexec/podman/
+
+# Register hook (/usr/share/containers/oci/hooks.d/verified-container.json)
+{
+  "version": "1.0.0",
+  "hook": {
+    "path": "/usr/libexec/podman/verified-container-prestart"
+  },
+  "when": {
+    "annotations": {
+      "io.podman.verified-container": "true"
+    }
+  },
+  "stages": ["prestart"]
+}
+```
+
+**Usage:**
+
+```bash
+# Podman detects .ctp and sets annotation
+podman run nginx.ctp --verify
+
+# Or explicit annotation
+podman run --annotation=io.podman.verified-container=true nginx.ctp
+```
+
+==== 4.3.2 Option B: Conversion Layer
+
+Convert `.ctp` to OCI with verification metadata:
+
+```bash
+# Helper tool converts .ctp → OCI + stores attestations
+ctp-to-oci nginx.ctp --output-dir /tmp/nginx-oci
+
+# Podman loads the OCI directory
+podman load -i /tmp/nginx-oci
+
+# Run with verification via hook
+podman run localhost/nginx:verified --annotation=io.podman.verified-container=true
+```
+
+=== 4.4 Svalinn Gateway (Optional)
+
+For centralized verification, delegate to Svalinn:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  User: nerdctl run nginx.ctp --runtime=svalinn              │
+│         │                                                    │
+│         ▼                                                    │
+│  ┌──────────────────────────────────────────────┐           │
+│  │  Runtime Shim/Plugin                         │           │
+│  │  ┌────────────────────────────────────────┐  │           │
+│  │  │ 1. Detect --runtime=svalinn            │  │           │
+│  │  │ 2. Forward request to Svalinn gateway  │  │           │
+│  │  └────────────────────────────────────────┘  │           │
+│  └────────┬─────────────────────────────────────┘           │
+│           │ HTTP/JSON-RPC                                    │
+│           ▼                                                  │
+│  ┌──────────────────────────────────────────────┐           │
+│  │  Svalinn Gateway (Deno/ReScript)             │           │
+│  │  ┌────────────────────────────────────────┐  │           │
+│  │  │ 1. Validate request (JSON Schema)      │  │           │
+│  │  │ 2. Apply policy rules                  │  │           │
+│  │  │ 3. Delegate to Vörðr via MCP           │  │           │
+│  │  └────────────────────────────────────────┘  │           │
+│  └────────┬─────────────────────────────────────┘           │
+│           │ MCP/JSON-RPC                                     │
+│           ▼                                                  │
+│  ┌──────────────────────────────────────────────┐           │
+│  │  Vörðr (verifies and executes)               │           │
+│  └──────────────────────────────────────────────┘           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+== 5. CTP Bundle Format
+
+A `.ctp` bundle is a tarball containing:
+
+```
+nginx.ctp (tarball)
+├── manifest.toml              # Package metadata
+├── oci-layout                 # OCI Image Layout (per OCI spec)
+│   ├── index.json
+│   ├── blobs/
+│   │   └── sha256/
+│   │       ├── <config>
+│   │       ├── <layer1>
+│   │       └── <layer2>
+│   └── oci-layout
+├── attestations/              # Verification artifacts
+│   ├── bundle.json            # Attestation bundle (in-toto)
+│   ├── sbom.json              # SBOM (CycloneDX or SPDX)
+│   └── provenance.json        # SLSA provenance
+└── signatures/                # Cryptographic signatures
+    ├── release.sig            # Threshold signature
+    └── logs/                  # Transparency log proofs
+        ├── log1.proof
+        └── log2.proof
+```
+
+== 6. Verification Enforcement
+
+=== 6.1 MUST Requirements
+
+All runtime integrations MUST:
+
+1. **Parse the `.ctp` bundle** - Extract OCI layout and attestations
+2. **Verify attestations** - Follow link:verification-protocol.adoc[Verification Protocol]
+3. **Enforce threshold signatures** - Require k-of-n signatures
+4. **Validate transparency log proofs** - Verify inclusion in federated logs
+5. **Abort on REJECT** - Never execute unverified containers in strict mode
+6. **Log verification results** - Record decision with timestamp and outcome
+
+=== 6.2 SHOULD Requirements
+
+Runtime integrations SHOULD:
+
+1. **Cache verification results** - Avoid redundant verification (1 hour default)
+2. **Support offline mode** - Verify using pre-loaded attestations
+3. **Provide audit logs** - Forensic analysis of verification decisions
+4. **Implement timeouts** - Bound verification time (default 30s)
+
+=== 6.3 Verification Modes
+
+All runtimes MUST support these modes:
+
+* **strict** (default for `.ctp`): REJECT on any verification failure
+* **permissive** (dev/test): WARN on failure but continue
+* **audit**: Log verification but don't block execution
+
+Configuration example:
+
+```bash
+# Strict mode (default)
+nerdctl run nginx.ctp --verify
+
+# Permissive mode
+nerdctl run nginx.ctp --verify --verify-mode=permissive
+
+# Audit mode
+nerdctl run nginx.ctp --verify --verify-mode=audit
+```
+
+== 7. CLI Integration Patterns
+
+=== 7.1 Automatic Detection
+
+Runtimes SHOULD detect `.ctp` bundles by file extension:
+
+```bash
+# Auto-detected as CTP bundle
+nerdctl run nginx.ctp --verify
+podman run nginx.ctp --verify
+```
+
+=== 7.2 Explicit Flags
+
+Provide explicit flags for clarity:
+
+```bash
+# Explicit bundle type
+nerdctl run --bundle-type=ctp nginx.ctp
+
+# Explicit verification
+podman run --verify-attestations nginx.ctp
+```
+
+=== 7.3 Compose Support
+
+Support `.ctp` bundles in compose files:
+
+```yaml
+version: "3"
+services:
+  web:
+    image: nginx.ctp  # Auto-detected
+    x-verification:
+      mode: strict
+      policy: require-sbom
+```
+
+Usage:
+
+```bash
+nerdctl compose up
+podman-compose up
+svalinn-compose up
+```
+
+== 8. Plugin/Shim Specification
+
+=== 8.1 Shim Interface
+
+Containerd shims MUST implement:
+
+```go
+// Shim entrypoint
+func main() {
+    // 1. Parse command-line args
+    // 2. Load .ctp bundle
+    // 3. Verify attestations
+    // 4. If ALLOW: delegate to runc/crun
+    // 5. If REJECT: exit with error code
+}
+```
+
+Exit codes:
+
+* `0`: Verification passed, container started
+* `1`: Verification failed (REJECT)
+* `2`: Bundle malformed
+* `3`: Network error (log unavailable)
+
+=== 8.2 Hook Interface
+
+OCI hooks MUST implement:
+
+```json
+{
+  "version": "1.0.0",
+  "hook": {
+    "path": "/usr/libexec/verified-container-prestart",
+    "args": ["verify", "--bundle", "$BUNDLE_PATH"],
+    "env": ["VERIFY_MODE=strict"]
+  },
+  "when": {
+    "annotations": {
+      "io.verified-container.enable": "true"
+    }
+  },
+  "stages": ["prestart"]
+}
+```
+
+Hook MUST:
+
+1. Receive bundle path via annotation or environment
+2. Verify attestations
+3. Exit 0 (ALLOW) or non-zero (REJECT)
+4. Write audit log to `/var/log/verified-container/audit.log`
+
+=== 8.3 Plugin Interface
+
+Plugins MUST provide:
+
+```bash
+# Help text
+plugin-name --help
+
+# Verification subcommand
+plugin-name verify <bundle.ctp>
+
+# Unpacking
+plugin-name unpack <bundle.ctp> --output <dir>
+
+# Version
+plugin-name --version
+```
+
+== 9. Security Considerations
+
+=== 9.1 Bundle Integrity
+
+After unpacking, verify that the OCI image digest matches the attestation subject. Prevent TOCTOU attacks.
+
+=== 9.2 Temporary Storage
+
+Unpack `.ctp` bundles to secure temporary directories with restrictive permissions (`0700`). Clean up after use.
+
+=== 9.3 Trust Store Updates
+
+Monitor trust store for key revocations. Invalidate caches when keys are revoked.
+
+=== 9.4 Network Isolation
+
+In strict mode, prevent container execution if transparency logs are unreachable. In permissive mode, WARN and continue.
+
+== 10. Examples
+
+=== 10.1 End-to-End Workflow
+
+```bash
+# 1. Build with Cerro Torre
+ct pack docker.io/library/nginx:1.26 -o nginx.ctp
+
+# 2. Run with nerdctl (via shim)
+nerdctl run nginx.ctp --verify --name web -p 8080:80
+
+# 3. Run with Podman (via hook)
+podman run nginx.ctp --verify --name web -p 8080:80
+
+# 4. Run with Vörðr (native)
+vordr run nginx.ctp --name web -p 8080:80
+```
+
+=== 10.2 Compose Workflow
+
+```yaml
+# docker-compose.yml
+version: "3"
+services:
+  web:
+    image: nginx.ctp
+    ports:
+      - "8080:80"
+    x-verification:
+      mode: strict
+      require:
+        - sbom
+        - slsa-provenance
+        - threshold-signature
+```
+
+```bash
+# Run with verification
+nerdctl compose up
+podman-compose up
+svalinn-compose up
+```
+
+== 11. Conformance Testing
+
+Runtime integrations MUST pass conformance tests:
+
+1. **Bundle Parsing**: Correctly unpack `.ctp` bundles
+2. **Verification Protocol**: Implement all steps from link:verification-protocol.adoc[Verification Protocol]
+3. **Error Handling**: Properly reject invalid bundles
+4. **Caching**: Respect cache TTL and invalidation
+5. **Offline Mode**: Support pre-loaded attestations
+
+Test vectors: link:../vectors/runtime-integration/[vectors/runtime-integration/]
+
+== 12. Changelog
+
+=== 0.1.0 (2026-01-24)
+- Initial specification
+- nerdctl/containerd shim and plugin designs
+- Podman hook and conversion layer designs
+- Svalinn gateway integration
+- CTP bundle format overview

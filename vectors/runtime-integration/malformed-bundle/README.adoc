@@ -1,0 +1,23 @@
+= malformed-bundle
+
+== Description
+
+Invalid tarball data that cannot be extracted.
+
+== Expected Behavior
+
+* **All modes**: REJECT with EXIT_MALFORMED (exit code 2)
+
+Malformed bundles MUST be rejected in all modes, including permissive and audit.
+
+== Validates
+
+* Bundle parsing error handling (runtime-integration.adoc Section 6.1)
+* Exit code 2 for malformed data (Section 8.1/8.2)
+* Graceful failure on invalid input
+
+== Reference
+
+See runtime-integration.adoc Section 8.1:
+
+> `2`: Bundle malformed

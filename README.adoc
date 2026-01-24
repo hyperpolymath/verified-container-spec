@@ -53,6 +53,10 @@ This repository defines the shared protocol between container image producers (b
 | Procedure for verifying images before execution
 | Draft
 
+| link:spec/runtime-integration.adoc[Runtime Integration]
+| Plugin and shim specifications for nerdctl, Podman, and other runtimes
+| Draft
+
 | link:spec/transparency-log.adoc[Transparency Log]
 | Requirements for federated transparency logs
 | Draft
@@ -88,7 +92,9 @@ Producers and consumers can be implemented in any language. Only the wire format
 
 === Consumers
 
-* https://github.com/hyperpolymath/svalinn[Svalinn/Vordr] — Rust/SPARK container runtime with formal verification
+* https://github.com/hyperpolymath/svalinn[Svalinn/Vordr] — Rust/SPARK container runtime with formal verification (native `.ctp` support)
+* **nerdctl/containerd** — Via shim or plugin (see link:spec/runtime-integration.adoc[Runtime Integration])
+* **Podman** — Via OCI hooks or conversion layer (see link:spec/runtime-integration.adoc[Runtime Integration])
 
 == Contributing
 

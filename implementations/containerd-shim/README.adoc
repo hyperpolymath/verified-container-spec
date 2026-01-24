@@ -1,0 +1,74 @@
+= containerd-shim-verified-container
+
+SPDX-License-Identifier: MIT OR Apache-2.0
+
+== Overview
+
+Reference implementation of a containerd shim for running `.ctp` (Cerro Torre Package) bundles.
+
+Implements https://github.com/hyperpolymath/verified-container-spec/blob/main/spec/runtime-integration.adoc[Runtime Integration Specification] Section 4.2.1.
+
+== Status
+
+**Development** - This is a reference implementation demonstrating the integration pattern. Production deployments should implement full cryptographic verification.
+
+== Features
+
+* Parses `.ctp` bundles per runtime-integration.adoc Section 5
+* Verifies attestations following verification-protocol.adoc
+* Supports strict/permissive/audit modes
+* Logs verification results to `/var/log/verified-container/audit.log`
+* Delegates to `runc`/`crun` for OCI execution
+
+== Building
+
+[source,bash]
+----
+cargo build --release
+sudo cp target/release/containerd-shim-verified-container-v1 /usr/local/bin/
+----
+
+== Configuration
+
+Add to `/etc/containerd/config.toml`:
+
+[source,toml]
+----
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.verified-container]
+    runtime_type = "io.containerd.verified-container.v1"
+----
+
+== Usage
+
+[source,bash]
+----
+# With nerdctl
+nerdctl run --runtime=verified-container nginx.ctp
+
+# Automatic detection (if .ctp extension registered)
+nerdctl run nginx.ctp --verify
+----
+
+== Exit Codes
+
+Per runtime-integration.adoc Section 8.1:
+
+* `0`: Verification passed, container started
+* `1`: Verification failed (REJECT)
+* `2`: Bundle malformed
+* `3`: Network error (log unavailable)
+
+== Production Deployment
+
+This reference implementation requires additional work for production:
+
+1. **Full signature verification** - Implement Ed25519 verification with trust store
+2. **Threshold signatures** - Verify k-of-n signatures from release signers
+3. **Transparency log proofs** - Verify Merkle inclusion proofs
+4. **Cache verification results** - Avoid redundant verification (1 hour TTL)
+5. **Offline mode** - Support pre-loaded attestations
+
+== License
+
+Dual-licensed under MIT OR Apache-2.0 to match the verified-container-spec.

@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "containerd-shim-verified-container"
+version = "0.1.0"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Containerd shim for verified-container-spec compliant .ctp bundles"
+repository = "https://github.com/hyperpolymath/verified-container-spec"
+
+[dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+tar = "0.4"
+flate2 = "1.0"
+sha2 = "0.10"
+ed25519-dalek = "2.1"
+tokio = { version = "1.35", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+chrono = "0.4"
+
+[dev-dependencies]
+tempfile = "3.8"
+
+[[bin]]
+name = "containerd-shim-verified-container-v1"
+path = "src/main.rs"
