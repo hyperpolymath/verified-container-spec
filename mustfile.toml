@@ -1,0 +1,41 @@
+# mustfile.toml
+schema = "0.1"
+
+[project]
+name = "verified-container-spec"
+version = "0.1.0"
+license = "PMPL-1.0"
+author = "Hyperpolymath"
+
+[tasks.build]
+description = "Build the project"
+commands = ["just build"]
+
+[tasks.test]
+description = "Run tests"
+commands = ["just test"]
+
+[tasks.fmt]
+description = "Format files"
+commands = ["just fmt"]
+
+[tasks.lint]
+description = "Lint files"
+commands = ["just lint"]
+
+[requirements]
+must_have = [
+  "README.adoc",
+  "LICENSE",
+  "Mustfile",
+  "justfile",
+  "mustfile.toml",
+  "spec/attestation-bundle.adoc",
+]
+
+must_not_have = [
+  "Makefile",
+  "Dockerfile",
+  ".env",
+  "node_modules/",
+]
