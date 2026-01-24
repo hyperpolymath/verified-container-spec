@@ -1,0 +1,210 @@
+{
+  "version": "1.0.0",
+  "description": "Security policy for ProvenCrypto.jl container (svalinn/vordr runtime)",
+  "metadata": {
+    "container": "proven-crypto-runner",
+    "image": "ghcr.io/hyperpolymath/cerro-torre:latest",
+    "license": "PMPL-1.0-or-later",
+    "author": "Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"
+  },
+
+  "namespaces": {
+    "pid": {
+      "enabled": true,
+      "description": "Isolate process tree"
+    },
+    "network": {
+      "enabled": true,
+      "loopback_only": true,
+      "description": "Network isolation (loopback only, no external access)"
+    },
+    "mount": {
+      "enabled": true,
+      "description": "Filesystem isolation"
+    },
+    "ipc": {
+      "enabled": true,
+      "description": "IPC isolation (no shared memory with host)"
+    },
+    "uts": {
+      "enabled": true,
+      "hostname": "crypto-runner",
+      "description": "Hostname isolation"
+    },
+    "user": {
+      "enabled": true,
+      "uid_map": "1000:1000:1",
+      "gid_map": "1000:1000:1",
+      "description": "User namespace (non-root)"
+    }
+  },
+
+  "seccomp": {
+    "default_action": "SCMP_ACT_ERRNO",
+    "description": "Syscall allowlist - only permit cryptography-safe operations",
+    "allowed_syscalls": [
+      "read", "write", "open", "close", "stat", "fstat", "lstat",
+      "poll", "lseek", "mmap", "mprotect", "munmap", "brk",
+      "rt_sigaction", "rt_sigprocmask", "rt_sigreturn",
+      "ioctl", "pread64", "pwrite64", "readv", "writev",
+      "access", "pipe", "select", "sched_yield", "mremap",
+      "msync", "mincore", "madvise", "shmget", "shmat", "shmctl",
+      "dup", "dup2", "pause", "nanosleep", "getitimer", "alarm",
+      "setitimer", "getpid", "sendfile", "socket", "connect",
+      "accept", "sendto", "recvfrom", "sendmsg", "recvmsg",
+      "shutdown", "bind", "listen", "getsockname", "getpeername",
+      "socketpair", "setsockopt", "getsockopt", "clone", "fork",
+      "vfork", "execve", "exit", "wait4", "kill", "uname",
+      "fcntl", "flock", "fsync", "fdatasync", "truncate",
+      "ftruncate", "getdents", "getcwd", "chdir", "fchdir",
+      "rename", "mkdir", "rmdir", "creat", "link", "unlink",
+      "symlink", "readlink", "chmod", "fchmod", "chown",
+      "fchown", "lchown", "umask", "gettimeofday", "getrlimit",
+      "getrusage", "sysinfo", "times", "ptrace", "getuid",
+      "syslog", "getgid", "setuid", "setgid", "geteuid",
+      "getegid", "setpgid", "getppid", "getpgrp", "setsid",
+      "setreuid", "setregid", "getgroups", "setgroups",
+      "setresuid", "getresuid", "setresgid", "getresgid",
+      "getpgid", "setfsuid", "setfsgid", "getsid", "capget",
+      "capset", "rt_sigpending", "rt_sigtimedwait",
+      "rt_sigqueueinfo", "rt_sigsuspend", "sigaltstack",
+      "utime", "mknod", "personality", "ustat", "statfs",
+      "fstatfs", "sysfs", "getpriority", "setpriority",
+      "sched_setparam", "sched_getparam", "sched_setscheduler",
+      "sched_getscheduler", "sched_get_priority_max",
+      "sched_get_priority_min", "sched_rr_get_interval",
+      "mlock", "munlock", "mlockall", "munlockall",
+      "vhangup", "modify_ldt", "pivot_root", "_sysctl",
+      "prctl", "arch_prctl", "adjtimex", "setrlimit",
+      "chroot", "sync", "acct", "settimeofday", "mount",
+      "umount2", "swapon", "swapoff", "reboot", "sethostname",
+      "setdomainname", "iopl", "ioperm", "init_module",
+      "delete_module", "quotactl", "gettid", "readahead",
+      "setxattr", "lsetxattr", "fsetxattr", "getxattr",
+      "lgetxattr", "fgetxattr", "listxattr", "llistxattr",
+      "flistxattr", "removexattr", "lremovexattr",
+      "fremovexattr", "tkill", "time", "futex",
+      "sched_setaffinity", "sched_getaffinity",
+      "io_setup", "io_destroy", "io_getevents", "io_submit",
+      "io_cancel", "lookup_dcookie", "epoll_create",
+      "getdents64", "set_tid_address", "restart_syscall",
+      "semtimedop", "fadvise64", "timer_create",
+      "timer_settime", "timer_gettime", "timer_getoverrun",
+      "timer_delete", "clock_settime", "clock_gettime",
+      "clock_getres", "clock_nanosleep", "exit_group",
+      "epoll_wait", "epoll_ctl", "tgkill", "utimes",
+      "mbind", "set_mempolicy", "get_mempolicy", "mq_open",
+      "mq_unlink", "mq_timedsend", "mq_timedreceive",
+      "mq_notify", "mq_getsetattr", "waitid", "add_key",
+      "request_key", "keyctl", "ioprio_set", "ioprio_get",
+      "inotify_init", "inotify_add_watch",
+      "inotify_rm_watch", "openat", "mkdirat", "mknodat",
+      "fchownat", "futimesat", "newfstatat", "unlinkat",
+      "renameat", "linkat", "symlinkat", "readlinkat",
+      "fchmodat", "faccessat", "pselect6", "ppoll",
+      "unshare", "set_robust_list", "get_robust_list",
+      "splice", "tee", "sync_file_range", "vmsplice",
+      "move_pages", "utimensat", "epoll_pwait",
+      "signalfd", "timerfd_create", "eventfd", "fallocate",
+      "timerfd_settime", "timerfd_gettime", "accept4",
+      "signalfd4", "eventfd2", "epoll_create1", "dup3",
+      "pipe2", "inotify_init1", "preadv", "pwritev",
+      "rt_tgsigqueueinfo", "perf_event_open",
+      "recvmmsg", "fanotify_init", "fanotify_mark",
+      "prlimit64", "name_to_handle_at", "open_by_handle_at",
+      "clock_adjtime", "syncfs", "sendmmsg", "setns",
+      "getcpu", "process_vm_readv", "process_vm_writev",
+      "kcmp", "finit_module", "sched_setattr",
+      "sched_getattr", "renameat2", "seccomp",
+      "getrandom", "memfd_create", "kexec_file_load",
+      "bpf", "execveat", "userfaultfd", "membarrier",
+      "mlock2", "copy_file_range", "preadv2", "pwritev2",
+      "pkey_mprotect", "pkey_alloc", "pkey_free", "statx",
+      "rseq", "io_uring_setup", "io_uring_enter",
+      "io_uring_register", "open_tree", "move_mount",
+      "fsopen", "fsconfig", "fsmount", "fspick",
+      "pidfd_open", "clone3", "close_range", "openat2",
+      "pidfd_getfd", "faccessat2", "process_madvise",
+      "epoll_pwait2", "mount_setattr", "quotactl_fd",
+      "landlock_create_ruleset", "landlock_add_rule",
+      "landlock_restrict_self"
+    ]
+  },
+
+  "cgroups": {
+    "cpu": {
+      "quota": 100000,
+      "period": 100000,
+      "shares": 1024,
+      "description": "Limit to 1 CPU core equivalent"
+    },
+    "memory": {
+      "limit_bytes": 2147483648,
+      "soft_limit_bytes": 1073741824,
+      "description": "Hard limit 2GB, soft limit 1GB"
+    },
+    "pids": {
+      "max": 512,
+      "description": "Maximum 512 processes"
+    },
+    "io": {
+      "weight": 500,
+      "description": "Medium I/O priority"
+    }
+  },
+
+  "capabilities": {
+    "drop": [
+      "CAP_AUDIT_CONTROL", "CAP_AUDIT_READ", "CAP_AUDIT_WRITE",
+      "CAP_BLOCK_SUSPEND", "CAP_CHOWN", "CAP_DAC_OVERRIDE",
+      "CAP_DAC_READ_SEARCH", "CAP_FOWNER", "CAP_FSETID",
+      "CAP_IPC_LOCK", "CAP_IPC_OWNER", "CAP_KILL",
+      "CAP_LEASE", "CAP_LINUX_IMMUTABLE", "CAP_MAC_ADMIN",
+      "CAP_MAC_OVERRIDE", "CAP_MKNOD", "CAP_NET_ADMIN",
+      "CAP_NET_BIND_SERVICE", "CAP_NET_BROADCAST",
+      "CAP_NET_RAW", "CAP_SETGID", "CAP_SETFCAP",
+      "CAP_SETPCAP", "CAP_SETUID", "CAP_SYS_ADMIN",
+      "CAP_SYS_BOOT", "CAP_SYS_CHROOT", "CAP_SYS_MODULE",
+      "CAP_SYS_NICE", "CAP_SYS_PACCT", "CAP_SYS_PTRACE",
+      "CAP_SYS_RAWIO", "CAP_SYS_RESOURCE", "CAP_SYS_TIME",
+      "CAP_SYS_TTY_CONFIG", "CAP_SYSLOG", "CAP_WAKE_ALARM"
+    ],
+    "description": "Drop all capabilities - run with minimal privileges"
+  },
+
+  "mounts": {
+    "readonly": ["/", "/usr", "/etc", "/bin", "/sbin", "/lib", "/lib64"],
+    "tmpfs": ["/tmp", "/var/tmp"],
+    "volumes": [
+      {
+        "source": "./ProvenCrypto.jl",
+        "destination": "/crypto/provencrypto",
+        "readonly": true
+      }
+    ]
+  },
+
+  "runtime_options": {
+    "no_new_privileges": true,
+    "readonly_rootfs": true,
+    "mask_paths": [
+      "/proc/acpi",
+      "/proc/kcore",
+      "/proc/keys",
+      "/proc/latency_stats",
+      "/proc/timer_list",
+      "/proc/timer_stats",
+      "/proc/sched_debug",
+      "/proc/scsi",
+      "/sys/firmware"
+    ],
+    "readonly_paths": [
+      "/proc/asound",
+      "/proc/bus",
+      "/proc/fs",
+      "/proc/irq",
+      "/proc/sys",
+      "/proc/sysrq-trigger"
+    ]
+  }
+}

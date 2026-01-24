@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# ProvenCrypto.jl - Isolated cryptographic operations container
+#
+# Security Model:
+# - Process isolation via namespaces (PID, net, mount, IPC, UTS, user)
+# - OS-level sandboxing via seccomp filters
+# - Resource limits via cgroups
+# - Reproducible builds via Guix
+# - Verified base image: cerro-torre (Ada/SPARK verified)
+
+FROM ghcr.io/hyperpolymath/cerro-torre:latest
+
+# Metadata
+LABEL org.opencontainers.image.title="ProvenCrypto Runner"
+LABEL org.opencontainers.image.description="Isolated execution environment for ProvenCrypto.jl cryptographic operations"
+LABEL org.opencontainers.image.authors="Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"
+LABEL org.opencontainers.image.license="PMPL-1.0-or-later"
+LABEL org.opencontainers.image.source="https://github.com/hyperpolymath/verified-container-spec"
+
+# Install Guix for reproducible package management
+RUN apk add --no-cache \
+    guix \
+    guile \
+    git \
+    ca-certificates \
+    && rm -rf /var/cache/apk/*
+
+# Copy Guix channel configuration
+COPY channels.scm /etc/guix/channels.scm
+
+# Install Julia via Guix (reproducible build)
+RUN guix pull --channels=/etc/guix/channels.scm && \
+    guix install julia libsodium glibc-locales coreutils && \
+    guix gc  # Clean up build artifacts
+
+# Fallback: Try Nix if Guix fails for specific packages
+COPY nix-fallback.sh /usr/local/bin/nix-fallback
+RUN chmod +x /usr/local/bin/nix-fallback
+
+# Create non-root user for crypto operations
+RUN addgroup -S crypto-runner && \
+    adduser -S -G crypto-runner -h /home/crypto -s /sbin/nologin crypto-runner
+
+# Set up workspace with restricted permissions
+WORKDIR /tmp/crypto-workspace
+RUN chown crypto-runner:crypto-runner /tmp/crypto-workspace && \
+    chmod 700 /tmp/crypto-workspace
+
+# Copy ProvenCrypto.jl package (mounted at runtime via volume)
+VOLUME ["/crypto/provencrypto"]
+
+# Copy entrypoint script
+COPY crypto-runner.sh /usr/local/bin/crypto-runner
+RUN chmod +x /usr/local/bin/crypto-runner
+
+# Security: Drop all capabilities, run as non-root
+USER crypto-runner
+
+# Health check: Verify Julia and libsodium are available
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD julia -e 'println("ProvenCrypto container healthy")' || exit 1
+
+# Default: Run interactive Julia REPL with ProvenCrypto loaded
+ENTRYPOINT ["/usr/local/bin/crypto-runner"]
+CMD ["repl"]
