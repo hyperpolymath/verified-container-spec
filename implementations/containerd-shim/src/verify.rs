@@ -301,7 +301,7 @@ async fn verify_log_inclusion(attestation: &AttestationBundle, trust_store: &Tru
     // Verify each log entry (Section 6.6 step 3)
     for log_entry in &attestation.log_entries {
         // Look up log public key in trust store (step 3a)
-        let log_key = trust_store.get_key(&log_entry.log_id)
+        let _log_key = trust_store.get_key(&log_entry.log_id)
             .context(format!("Log {} not in trust store", log_entry.log_id))?;
 
         // Verify signedEntryTimestamp signature (step 3b)
@@ -326,26 +326,78 @@ fn verify_merkle_proof(proof: &MerkleProof) -> Result<()> {
     info!("Verifying Merkle inclusion proof (log_index: {}, tree_size: {})",
         proof.log_index, proof.tree_size);
 
-    // Reconstruct Merkle tree path
-    // This is a simplified implementation - production should use full RFC 6962 logic
-    let mut current_hash = proof.hashes.first()
-        .context("Empty Merkle proof hashes")?
-        .clone();
+    // RFC 6962 Section 2.1.1: Merkle Audit Paths
+    // Verify that log_index < tree_size
+    if proof.log_index >= proof.tree_size {
+        bail!("Invalid proof: log_index ({}) >= tree_size ({})",
+            proof.log_index, proof.tree_size);
+    }
 
-    for (i, hash) in proof.hashes.iter().skip(1).enumerate() {
+    // Decode root hash from hex
+    let expected_root = decode_hex(&proof.root_hash)
+        .context("Failed to decode root hash")?;
+
+    // Decode audit path hashes from hex
+    let audit_path: Result<Vec<Vec<u8>>> = proof.hashes
+        .iter()
+        .map(|h| decode_hex(h).context(format!("Failed to decode audit path hash: {}", h)))
+        .collect();
+    let audit_path = audit_path?;
+
+    // RFC 6962 Section 2.1.1: Reconstruct root hash from leaf and audit path
+    // Start with the leaf hash (first hash in the proof is the leaf)
+    if audit_path.is_empty() {
+        bail!("Empty audit path in Merkle proof");
+    }
+
+    let mut current_hash = audit_path[0].clone();
+    let mut index = proof.log_index;
+    let mut tree_size = proof.tree_size;
+
+    // Process each hash in the audit path
+    for sibling_hash in audit_path.iter().skip(1) {
+        // RFC 6962 Section 2.1: Merkle Hash Tree
+        // MTH({d(0)}) = SHA-256(0x00 || d(0))  -- leaf
+        // MTH(D[n]) = SHA-256(0x01 || MTH(D[0:k]) || MTH(D[k:n]))  -- node
+
+        // Determine if sibling is on the left or right
+        // If index is even, sibling is on the right
+        // If index is odd, sibling is on the left
+        let is_right_node = index % 2 == 0;
+
         let mut hasher = Sha256::new();
-        hasher.update(current_hash.as_bytes());
-        hasher.update(hash.as_bytes());
-        current_hash = format!("{:x}", hasher.finalize());
+        hasher.update(&[0x01]); // RFC 6962: 0x01 prefix for internal nodes
+
+        if is_right_node {
+            // Current is left, sibling is right
+            hasher.update(&current_hash);
+            hasher.update(sibling_hash);
+        } else {
+            // Sibling is left, current is right
+            hasher.update(sibling_hash);
+            hasher.update(&current_hash);
+        }
+
+        current_hash = hasher.finalize().to_vec();
+
+        // Move up the tree
+        index /= 2;
+        tree_size = (tree_size + 1) / 2;
     }
 
-    // Verify root hash matches
-    if current_hash != proof.root_hash {
-        bail!("Merkle proof verification failed: computed {} != expected {}",
-            current_hash, proof.root_hash);
+    // Verify computed root matches expected root
+    if current_hash != expected_root {
+        bail!("Merkle proof verification failed: computed root {} != expected {}",
+            hex::encode(&current_hash), hex::encode(&expected_root));
     }
 
+    info!("Merkle proof verified successfully");
     Ok(())
+}
+
+/// Decode a hexadecimal string to bytes
+fn decode_hex(s: &str) -> Result<Vec<u8>> {
+    hex::decode(s).context("Invalid hex string")
 }
 
 fn verify_threshold(attestation: &AttestationBundle, trust_store: &TrustStore) -> Result<()> {

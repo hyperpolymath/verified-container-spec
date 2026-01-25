@@ -20,8 +20,10 @@ sha2 = "0.10"
 ed25519-dalek = "2.1"
 tokio = { version = "1.35", features = ["full"] }
 tracing = "0.1"
-tracing-subscriber = "0.3"
-chrono = "0.4"
+tempfile = "3.8"
+chrono = { version = "0.4", features = ["serde"] }
+hex = "0.4"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 tempfile = "3.8"
