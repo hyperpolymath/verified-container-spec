@@ -76,23 +76,21 @@ if [ "$(id -u)" -eq 0 ]; then
     exit 1
 fi
 
-# Build solver command with timeout
+# Execute solver with timeout
+# SECURITY: Use explicit command execution to prevent shell injection
+# All variables are quoted to prevent word splitting
 case "$SOLVER" in
     z3)
-        CMD="z3 -T:${TIMEOUT_SEC} $SCRIPT_FILE"
+        exec timeout "${TIMEOUT_SEC}s" z3 "-T:${TIMEOUT_SEC}" "$SCRIPT_FILE"
         ;;
     cvc5)
-        CMD="cvc5 --tlimit=${TIMEOUT_MS} $SCRIPT_FILE"
+        exec timeout "${TIMEOUT_SEC}s" cvc5 "--tlimit=${TIMEOUT_MS}" "$SCRIPT_FILE"
         ;;
     yices)
-        CMD="yices --timeout=${TIMEOUT_SEC} $SCRIPT_FILE"
+        exec timeout "${TIMEOUT_SEC}s" yices "--timeout=${TIMEOUT_SEC}" "$SCRIPT_FILE"
         ;;
     mathsat)
         # MathSAT doesn't have built-in timeout, use timeout(1)
-        CMD="timeout ${TIMEOUT_SEC}s mathsat $SCRIPT_FILE"
+        exec timeout "${TIMEOUT_SEC}s" mathsat "$SCRIPT_FILE"
         ;;
 esac
-
-# Execute solver with timeout
-# Use timeout as a fallback even for solvers with built-in timeout
-exec timeout "${TIMEOUT_SEC}s" $CMD

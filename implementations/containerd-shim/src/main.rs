@@ -122,11 +122,22 @@ fn parse_verify_mode(args: &[String]) -> Result<VerificationMode> {
 }
 
 fn delegate_to_runtime(oci_dir: &Path) -> Result<()> {
-    // Determine which OCI runtime to use (runc or crun)
+    // SECURITY: Validate OCI runtime against allowlist to prevent command injection
     let runtime = std::env::var("OCI_RUNTIME").unwrap_or_else(|_| "runc".to_string());
+
+    // Allowlist of permitted OCI runtimes
+    let allowed_runtimes = ["runc", "crun", "youki"];
+    if !allowed_runtimes.contains(&runtime.as_str()) {
+        bail!(
+            "Invalid OCI_RUNTIME: '{}'. Allowed: {:?}",
+            runtime,
+            allowed_runtimes
+        );
+    }
 
     info!("Delegating to OCI runtime: {}", runtime);
 
+    // Use runtime name directly (simple validation above prevents injection)
     let status = Command::new(&runtime)
         .arg("run")
         .arg(oci_dir)
