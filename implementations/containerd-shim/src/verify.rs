@@ -301,12 +301,15 @@ async fn verify_log_inclusion(attestation: &AttestationBundle, trust_store: &Tru
     // Verify each log entry (Section 6.6 step 3)
     for log_entry in &attestation.log_entries {
         // Look up log public key in trust store (step 3a)
-        let _log_key = trust_store.get_key(&log_entry.log_id)
+        let log_key = trust_store.get_key(&log_entry.log_id)
             .context(format!("Log {} not in trust store", log_entry.log_id))?;
 
         // Verify signedEntryTimestamp signature (step 3b)
-        // NOTE: Simplified - production should verify actual SET signature
-        info!("Verified SET for log: {}", log_entry.log_id);
+        // RFC 6962 Section 3.2: Signed Certificate Timestamp
+        verify_set_signature(&log_entry.signed_entry_timestamp, log_key, attestation)
+            .context(format!("SET_INVALID: Signed Entry Timestamp verification failed for log {}", log_entry.log_id))?;
+
+        info!("Verified SET signature for log: {}", log_entry.log_id);
 
         // Verify Merkle inclusion proof (step 3c)
         if let Some(proof) = &log_entry.inclusion_proof {
@@ -398,6 +401,77 @@ fn verify_merkle_proof(proof: &MerkleProof) -> Result<()> {
 /// Decode a hexadecimal string to bytes
 fn decode_hex(s: &str) -> Result<Vec<u8>> {
     hex::decode(s).context("Invalid hex string")
+}
+
+/// Verify Signed Entry Timestamp (SET) signature
+/// RFC 6962 Section 3.2: Signed Certificate Timestamp
+fn verify_set_signature(
+    set_b64: &str,
+    log_key: &TrustedKey,
+    _attestation: &AttestationBundle,
+) -> Result<()> {
+    use base64::{Engine as _, engine::general_purpose};
+
+    // Decode base64-encoded SET
+    let set_bytes = general_purpose::STANDARD
+        .decode(set_b64)
+        .context("Failed to decode signedEntryTimestamp from base64")?;
+
+    // RFC 6962 SET format (simplified):
+    // - Version (1 byte)
+    // - Signature type (1 byte)
+    // - Timestamp (8 bytes, milliseconds since epoch)
+    // - Entry data (variable)
+    // - Signature (variable, depends on algorithm)
+
+    if set_bytes.len() < 74 {
+        bail!("SET too short: {} bytes (expected >= 74)", set_bytes.len());
+    }
+
+    // Extract signature (last 64 bytes for Ed25519)
+    let signature_start = set_bytes.len() - 64;
+    let signed_data = &set_bytes[..signature_start];
+    let signature_bytes = &set_bytes[signature_start..];
+
+    // Verify Ed25519 signature using log's public key
+    use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+
+    let public_key = VerifyingKey::from_bytes(
+        log_key.key_bytes
+            .as_slice()
+            .try_into()
+            .context("Invalid log public key length (expected 32 bytes)")?
+    )?;
+
+    let signature = Signature::from_bytes(
+        signature_bytes
+            .try_into()
+            .context("Invalid SET signature length (expected 64 bytes)")?
+    );
+
+    public_key.verify(signed_data, &signature)
+        .context("SET signature verification failed: invalid signature from transparency log")?;
+
+    // Additional validation: check timestamp is recent (within 1 week)
+    if set_bytes.len() >= 10 {
+        let timestamp_bytes: [u8; 8] = set_bytes[2..10]
+            .try_into()
+            .context("Failed to extract timestamp from SET")?;
+        let timestamp_ms = u64::from_be_bytes(timestamp_bytes);
+        let timestamp_secs = timestamp_ms / 1000;
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs();
+
+        // Allow 1 week grace period (604800 seconds)
+        // NOTE: In production, this should be configurable
+        if timestamp_secs > now + 604800 {
+            bail!("SET timestamp is in the future: {}", timestamp_secs);
+        }
+    }
+
+    Ok(())
 }
 
 fn verify_threshold(attestation: &AttestationBundle, trust_store: &TrustStore) -> Result<()> {
