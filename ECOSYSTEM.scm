@@ -1,4 +1,4 @@
-;; SPDX-License-Identifier: AGPL-3.0-or-later
+;; SPDX-License-Identifier: PMPL-1.0-or-later
 ;; ECOSYSTEM.scm — verified-container-spec's position in the hyperpolymath ecosystem
 ;; Format: hyperpolymath/ECOSYSTEM.scm specification
 
@@ -73,7 +73,7 @@
               (relationship . "sibling-standard")
               (integration . "Repository compliance standard")))
 
-    ((project (name . "gitvisor")
+    ((project (name . "git-hud")
               (relationship . "infrastructure")
               (integration . "Repository management tooling"))))
 
