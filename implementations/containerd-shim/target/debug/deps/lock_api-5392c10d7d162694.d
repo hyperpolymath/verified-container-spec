@@ -1,0 +1,8 @@
+/var/mnt/eclipse/repos/verified-container-spec/implementations/containerd-shim/target/debug/deps/lock_api-5392c10d7d162694.d: /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/lib.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/mutex.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/remutex.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/rwlock.rs
+
+/var/mnt/eclipse/repos/verified-container-spec/implementations/containerd-shim/target/debug/deps/liblock_api-5392c10d7d162694.rmeta: /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/lib.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/mutex.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/remutex.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/rwlock.rs
+
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/lib.rs:
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/mutex.rs:
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/remutex.rs:
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/lock_api-0.4.14/src/rwlock.rs:

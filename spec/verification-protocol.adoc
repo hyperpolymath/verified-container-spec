@@ -33,21 +33,132 @@ See link:../docs/glossary.adoc[Glossary] for additional term definitions.
 
 This document defines the procedure for verifying a container image before execution. A compliant consumer MUST implement this protocol.
 
-== 4. Verification Modes
+== 4. Cryptographic Requirements
 
-=== 4.1 Strict Mode
+=== 4.1 Required Signature Algorithms
+
+Implementations MUST support the following signature algorithms:
+
+[cols="1,2,2,1"]
+|===
+| Suite ID | Algorithm | Standard | Status
+
+| **CT-SIG-01**
+| Ed25519 only
+| RFC 8032
+| REQUIRED
+
+| **CT-SIG-02**
+| Ed25519 + ML-DSA-87 (hybrid)
+| RFC 8032 + FIPS 204
+| RECOMMENDED (Q3 2026)
+
+| **CT-SIG-03**
+| ML-DSA-87 only (post-quantum)
+| FIPS 204
+| OPTIONAL
+
+| **CT-SIG-04**
+| Ed448 only
+| RFC 8032
+| RECOMMENDED
+
+| **CT-SIG-05**
+| SPHINCS+ only
+| NIST PQC Round 3
+| OPTIONAL
+|===
+
+**Migration Timeline**:
+- **2026 Q1-Q2**: CT-SIG-01 (Ed25519) required for all bundles
+- **2026 Q3**: CT-SIG-02 (hybrid PQ) available, RECOMMENDED for new bundles
+- **2027 Q1**: CT-SIG-02 REQUIRED for all new bundles
+- **2030+**: CT-SIG-01 deprecated, CT-SIG-02 or CT-SIG-03 required
+
+=== 4.2 Required Hash Algorithms
+
+Implementations MUST support the following hash algorithms:
+
+[cols="1,2,1"]
+|===
+| Algorithm | Use Case | Standard
+
+| **SHA-256**
+| Manifest digests, content addressing
+| FIPS 180-4
+
+| **SHA-512**
+| High-security environments
+| FIPS 180-4
+
+| **BLAKE3**
+| Fast hashing, performance-critical paths
+| BLAKE3 spec
+
+| **BLAKE3-512**
+| Database indexes, 512-bit output
+| BLAKE3 spec (extended)
+
+| **SHAKE256**
+| Extendable-output function (XOF)
+| FIPS 202
+
+| **SHAKE3-512**
+| Post-quantum margin (when standardized)
+| FIPS 202 (draft)
+|===
+
+**Current Implementation Status** (2026-01-28):
+- SHA-256: ✅ Required, implemented by all tools
+- SHA-512: ✅ Required, implemented by all tools
+- BLAKE3: ✅ Implemented (Cerro Torre)
+- BLAKE3-512: ⚠️ Planned (Q4 2026)
+- SHAKE256: ⚠️ Planned (Q2 2026)
+- SHAKE3-512: ❌ Awaiting FIPS 202 update
+
+=== 4.3 Post-Quantum Migration Strategy
+
+To protect against "harvest now, decrypt later" attacks, implementations SHOULD:
+
+1. **Hybrid Signatures**: Use CT-SIG-02 (Ed25519 + ML-DSA-87) for all production bundles by Q3 2026
+2. **Dual Verification**: Verify BOTH classical and post-quantum signatures in hybrid mode
+3. **Graceful Degradation**: Support verification of older CT-SIG-01 bundles until 2030
+4. **Forward Compatibility**: Bundle format is algorithm-agile (supports future algorithms without spec changes)
+
+**Rationale**: NIST estimates large-scale quantum computers capable of breaking classical signatures may exist by 2030-2040. Hybrid signatures provide:
+- Immediate protection (Ed25519 secure until quantum computers exist)
+- Future protection (ML-DSA-87 believed to be quantum-resistant)
+- Fallback security (compromise of one algorithm doesn't break the other)
+
+=== 4.4 Cryptographic Library Requirements
+
+Implementations MUST use:
+- **Ed25519**: libsodium, OpenSSL 3.x, or equivalent
+- **ML-DSA-87**: liboqs (Open Quantum Safe)
+- **Ed448**: libdecaf, libsodium, or OpenSSL 3.x
+- **SPHINCS+**: liboqs
+- **Hashing**: OpenSSL, Rust `sha2` crate, or equivalent FIPS-validated implementation
+
+Implementations MUST NOT:
+- Roll custom cryptographic primitives
+- Use deprecated algorithms (MD5, SHA-1, RSA < 2048-bit)
+- Disable signature verification in production (permissive mode is DEV ONLY)
+
+== 5. Verification Modes
+
+=== 5.1 Strict Mode
 
 All verification steps MUST pass. Any failure results in rejection.
 
-=== 4.2 Permissive Mode
+=== 5.2 Permissive Mode
 
 Verification is attempted. Failures result in warnings but execution proceeds. Recommended only for development/testing.
 
-=== 4.3 Audit Mode
+=== 5.3 Audit Mode
 
 Verification is performed and logged but does not affect execution. Used for gradual rollout.
 
-== 5. Verification Procedure
+== 6. Verification Procedure
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -102,16 +213,16 @@ Verification is performed and logged but does not affect execution. Used for gra
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-== 6. Step-by-Step Protocol
+== 7. Step-by-Step Protocol
 
-=== 6.1 Resolve Image Reference
+=== 7.1 Resolve Image Reference
 
 Input: Image reference (e.g., `registry.example.com/image:tag` or digest)
 
 1. If reference is a tag, resolve to digest
 2. Store the canonical digest: `sha256:<hex>`
 
-=== 6.2 Fetch Attestation Bundle
+=== 7.2 Fetch Attestation Bundle
 
 1. Query OCI Referrers API for the image digest
 2. Filter for `artifactType: application/vnd.verified-container.bundle+json`
@@ -121,7 +232,7 @@ Input: Image reference (e.g., `registry.example.com/image:tag` or digest)
 4. Fetch the bundle blob
 5. Store for subsequent steps
 
-=== 6.3 Parse Bundle
+=== 7.3 Parse Bundle
 
 1. Validate JSON structure
 2. Verify `mediaType` matches expected value
@@ -129,7 +240,7 @@ Input: Image reference (e.g., `registry.example.com/image:tag` or digest)
 4. Extract `attestations` and `logEntries` arrays
 5. If parsing fails: REJECT with `MALFORMED_BUNDLE`
 
-=== 6.4 Verify Subject Match
+=== 7.4 Verify Subject Match
 
 For each attestation in the bundle:
 
@@ -137,7 +248,7 @@ For each attestation in the bundle:
 2. Verify it matches the image digest from step 6.1
 3. If any mismatch: REJECT with `SUBJECT_MISMATCH`
 
-=== 6.5 Verify Signatures
+=== 7.5 Verify Signatures
 
 For each attestation:
 
@@ -146,10 +257,28 @@ For each attestation:
 3. If key not found: REJECT with `UNKNOWN_KEY`
 4. If key expired (`validUntil` in past): REJECT with `EXPIRED_KEY`
 5. If key not yet valid (`validFrom` in future): REJECT with `KEY_NOT_YET_VALID`
-6. Verify Ed25519 signature over payload
-7. If verification fails: REJECT with `INVALID_SIGNATURE`
+6. Determine signature algorithm from trust store key metadata:
+   - **CT-SIG-01** (Ed25519 only) - REQUIRED for all implementations
+   - **CT-SIG-02** (Hybrid: Ed25519 + ML-DSA-87) - RECOMMENDED for production
+   - **CT-SIG-03** (ML-DSA-87 only) - OPTIONAL, post-quantum only
+   - **CT-SIG-04** (Ed448 only) - RECOMMENDED for high-security environments
+   - **CT-SIG-05** (SPHINCS+ only) - OPTIONAL, conservative post-quantum
+7. Verify signature according to algorithm:
+   - For CT-SIG-01: Verify Ed25519 signature (RFC 8032)
+   - For CT-SIG-02: Verify BOTH Ed25519 AND ML-DSA-87 signatures
+   - For CT-SIG-03: Verify ML-DSA-87 signature (FIPS 204)
+   - For CT-SIG-04: Verify Ed448 signature (RFC 8032)
+   - For CT-SIG-05: Verify SPHINCS+ signature (NIST PQC Round 3)
+8. If verification fails: REJECT with `INVALID_SIGNATURE`
 
-=== 6.6 Verify Log Inclusion
+**Implementation Note**: As of 2026-01-28:
+- Cerro Torre implements CT-SIG-01 (Ed25519)
+- CT-SIG-02 (hybrid PQ) is under development (Phase 1, Q3 2026)
+- Consumers MUST support CT-SIG-01 at minimum
+- Consumers SHOULD support CT-SIG-02 when available
+- Future-dated bundles (20+ year archival) MUST use CT-SIG-02 or CT-SIG-03
+
+=== 7.6 Verify Log Inclusion
 
 1. Count distinct `logId` values in `logEntries`
 2. If fewer than 2 distinct logs: REJECT with `INSUFFICIENT_LOG_COVERAGE`
@@ -159,13 +288,13 @@ For each attestation:
    c. Verify Merkle inclusion proof
 4. If any proof fails: REJECT with `LOG_PROOF_INVALID`
 
-=== 6.7 Verify Threshold Signature
+=== 7.7 Verify Threshold Signature
 
 1. Identify the threshold group (e.g., `release-signers`)
 2. Count valid signatures from group members
 3. If count < k: REJECT with `THRESHOLD_NOT_MET`
 
-=== 6.8 Record Result
+=== 7.8 Record Result
 
 1. Log verification result with:
    - Image digest
@@ -175,7 +304,7 @@ For each attestation:
    - Error code if rejected
 2. Return result to caller
 
-== 7. Error Codes
+== 8. Error Codes
 
 [cols="2,3,2"]
 |===

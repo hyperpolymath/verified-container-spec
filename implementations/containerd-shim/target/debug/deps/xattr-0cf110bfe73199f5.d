@@ -1,0 +1,9 @@
+/var/mnt/eclipse/repos/verified-container-spec/implementations/containerd-shim/target/debug/deps/xattr-0cf110bfe73199f5.d: /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/lib.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/error.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/sys/mod.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/util.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/sys/linux_macos.rs
+
+/var/mnt/eclipse/repos/verified-container-spec/implementations/containerd-shim/target/debug/deps/libxattr-0cf110bfe73199f5.rmeta: /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/lib.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/error.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/sys/mod.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/util.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/sys/linux_macos.rs
+
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/lib.rs:
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/error.rs:
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/sys/mod.rs:
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/util.rs:
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/xattr-1.6.1/src/sys/linux_macos.rs:

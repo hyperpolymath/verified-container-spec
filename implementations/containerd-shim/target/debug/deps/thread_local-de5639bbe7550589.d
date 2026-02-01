@@ -1,0 +1,8 @@
+/var/mnt/eclipse/repos/verified-container-spec/implementations/containerd-shim/target/debug/deps/thread_local-de5639bbe7550589.d: /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/lib.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/cached.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/thread_id.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/unreachable.rs
+
+/var/mnt/eclipse/repos/verified-container-spec/implementations/containerd-shim/target/debug/deps/libthread_local-de5639bbe7550589.rmeta: /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/lib.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/cached.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/thread_id.rs /home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/unreachable.rs
+
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/lib.rs:
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/cached.rs:
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/thread_id.rs:
+/home/hyper/.asdf/installs/rust/nightly/registry/src/index.crates.io-1949cf8c6b5b557f/thread_local-1.1.9/src/unreachable.rs:

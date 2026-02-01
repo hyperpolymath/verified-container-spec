@@ -86,7 +86,7 @@ fn delegate_to_runtime(oci_dir: &Path) -> Result<()> {
 **Severity**: CRITICAL
 **CVSS**: 9.0 (Remote Code Execution if attacker controls environment)
 **CWE**: CWE-78 (OS Command Injection)
-**Status**: NEEDS FIX
+**Status**: ✅ FIXED (2026-01-28) - Added runtime allowlist validation
 
 ---
 
@@ -142,7 +142,7 @@ esac
 **Severity**: CRITICAL
 **CVSS**: 8.5 (Command injection if attacker controls SCRIPT_FILE path)
 **CWE**: CWE-78 (OS Command Injection)
-**Status**: NEEDS FIX
+**Status**: ✅ FIXED (2026-01-28) - All variables quoted, no shell expansion
 
 ---
 
