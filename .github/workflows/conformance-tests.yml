@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
 
       - name: Download shim
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: containerd-shim-verified-container-v1
           path: /tmp/
@@ -35,7 +35,7 @@ jobs:
         run: chmod +x /tmp/containerd-shim-verified-container-v1
 
       - name: Download test bundles
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: test-bundles
           path: vectors/runtime-integration/
