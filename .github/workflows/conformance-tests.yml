@@ -86,13 +86,13 @@ jobs:
           ./build-test-bundles.sh
 
       - name: Upload shim
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: containerd-shim-verified-container-v1
           path: implementations/containerd-shim/target/release/containerd-shim-verified-container-v1
 
       - name: Upload bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-bundles
           path: vectors/runtime-integration/*.ctp
